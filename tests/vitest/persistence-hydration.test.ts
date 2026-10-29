@@ -75,17 +75,6 @@ describe('persistence hydration and write-back', () => {
 
     await loadPersistedValue(storage, 'missing', JSON.parse, () => assert.fail('missing value should not apply'));
 
-    const connect = await loadTs('lib/connect.ts', {
-      'expo/fetch': {}, 'expo-constants': { default: {} }, 'react-native': { Platform: { OS: 'android' } }, 'expo-secure-store': {},
-    });
-    for (const legacyControlPlane of ['https://api.getopencode.app', 'https://apistaging.getopencode.app']) {
-      const storedControlPlane = new Map([['control-plane', legacyControlPlane]]);
-      const controlPlaneStorage = createStorage(storedControlPlane);
-      let controlPlane = connect.CONNECT_PRODUCTION_URL;
-      await loadPersistedValue(controlPlaneStorage, 'control-plane', connect.normalizeTrustedControlPlaneUrl, (value: any) => { controlPlane = value; });
-      assert.equal(controlPlane, 'https://api.opencodecloud.link', 'Discarded legacy preferences retain the new production default.');
-      assert.deepEqual(controlPlaneStorage.removed, ['control-plane']);
-    }
     const appearance = await loadTs('constants/appearance.ts');
     const wakePhrase = await loadTs('lib/voice/wake-phrase.ts');
     const localWakeTypes = await loadTs('lib/voice/local-wake-word/types.ts');
@@ -93,13 +82,12 @@ describe('persistence hydration and write-back', () => {
     const preferences = await loadTs('providers/opencode-preferences.ts', { '@/constants/appearance': appearance, '@/lib/auto-model/preferences': autoModelPreferences, '@/lib/voice/wake-phrase': wakePhrase, '@/lib/voice/local-wake-word/types': localWakeTypes });
     const profileUrls = await loadTs('lib/opencode/client/url.ts', { './types': { defaultConnectionSettings: { serverUrl: 'http://localhost' } } });
     const { parseConnectionSettings, parseChatPreferences } = await loadTs('providers/persisted-preferences.ts', {
-      '@/constants/appearance': appearance, '@/lib/auto-model/preferences': autoModelPreferences, '@/lib/connect': connect, '@/lib/voice/wake-phrase': wakePhrase,
+      '@/constants/appearance': appearance, '@/lib/auto-model/preferences': autoModelPreferences, '@/lib/voice/wake-phrase': wakePhrase,
       '@/lib/voice/local-wake-word/types': localWakeTypes,
       '@/providers/opencode-preferences': preferences, '@/lib/opencode/client/url': profileUrls, zod: { z },
     });
     assert.throws(() => parseConnectionSettings('{"serverUrl":123}'), /Invalid/);
     assert.equal(parseConnectionSettings('{"serverUrl":"https://alice:secret@host.test/proxy","username":"configured"}').serverUrl, 'https://host.test/proxy');
-    assert.throws(() => parseConnectionSettings('{"username":"alice","connect":{}}'), /Invalid/);
     assert.deepEqual(JSON.parse(JSON.stringify(parseConnectionSettings('{"serverUrl":"http://test","password":"legacy","unknown":true}'))), { serverUrl: 'http://test', password: 'legacy' });
     const parsed = parseChatPreferences(JSON.stringify({ mode: 'build', enabledModelIds: null, recentModelIds: 42,
       providerModelSelections: { p: false }, speechRate: 100, workingSoundVolume: -1, transcriptFontSize: 99,
@@ -151,7 +139,6 @@ describe('persistence hydration and write-back', () => {
         getItem: async (key: string) => { if (key === keys.SETTINGS_STORAGE_KEY) throw new Error('temporarily unreadable'); return stored.get(key) ?? null; },
         setItem: async (key: string, value: string) => { stored.set(key, value); }, removeItem: async (key: string) => { stored.delete(key); },
       } },
-      '@/lib/connect': { normalizeTrustedControlPlaneUrl: (raw: string) => raw },
       '@/lib/connection-password': {
         getConnectionPassword: async () => { credentialReads++; return 'another-server-secret'; },
         saveConnectionPassword: async () => assert.fail('unread credentials must remain untouched'),

@@ -64,24 +64,21 @@ describe('connection profiles', () => {
       `import { z } from ${JSON.stringify(pathToFileURL(path.join(root, 'node_modules/zod/index.cjs')).href)}; export { z };`,
     )}`;
 
+    const webSecretsStubUri = `data:text/javascript,${encodeURIComponent(`
+      const secrets = new Map();
+      export function getWebSecret(key) { return secrets.get(key) ?? ''; }
+      export function setWebSecret(key, value) { if (value) secrets.set(key, value); else secrets.delete(key); }
+    `)}`;
     const connectionScopeUri = await transpileToDataUri('lib/connection-scope.ts', [
       [/from '@scure\/base'/g, `from "${base64Uri}"`],
     ]);
     const storageKeysUri = await transpileToDataUri('lib/storage-keys.ts');
-    g.__profilesTestConnectConfig = { extra: { connectPilot: { enabled: true, controlPlanes: ['https://api.opencodecloud.link'] } } };
-    const constantsStubUri = `data:text/javascript,${encodeURIComponent(`export default { get expoConfig() { return globalThis.__profilesTestConnectConfig; } };`)}`;
-    const connectUri = await transpileToDataUri('lib/connect.ts', [
-      [/from 'expo\/fetch'/g, `from "data:text/javascript,export const fetch = (...args) => globalThis.fetch(...args);"`],
-      [/from 'expo-constants'/g, `from "${constantsStubUri}"`],
-      [/from 'expo-secure-store'/g, `from "${secureStoreStubUri}"`],
-      [/from 'react-native'/g, `from "${reactNativeStubUri}"`],
-    ]);
     const urlUri = await transpileToDataUri('lib/opencode/client/url.ts', [
       [/from '\.\/types'/g, `from "data:text/javascript,export const defaultConnectionSettings = {serverUrl:'http://localhost'};"`],
     ]);
     const connectionPasswordUri = await transpileToDataUri('lib/connection-password.ts', [
       [/from '@\/lib\/opencode\/client\/url'/g, `from "${urlUri}"`],
-      [/from '@\/lib\/connect'/g, `from "${connectUri}"`],
+      [/from '@\/lib\/secure-web-store'/g, `from "${webSecretsStubUri}"`],
       [/from '@react-native-async-storage\/async-storage'/g, `from "${asyncStorageStubUri}"`],
       [/from 'expo-secure-store'/g, `from "${secureStoreStubUri}"`],
       [/from 'react-native'/g, `from "${reactNativeStubUri}"`],
@@ -101,10 +98,10 @@ describe('connection profiles', () => {
     `)}`;
     const autoModelPreferencesUri = await transpileToDataUri('lib/auto-model/preferences.ts', []);
     const connectionProfilesUri = await transpileToDataUri('lib/connection-profiles.ts', [
+      [/from '@\/lib\/secure-web-store'/g, `from "${webSecretsStubUri}"`],
       [/from '@\/lib\/auto-model\/preferences'/g, `from "${autoModelPreferencesUri}"`],
       [/from '@\/providers\/workspace-storage'/g, `from "${workspaceStubUri}"`],
       [/from '@\/lib\/opencode\/client\/url'/g, `from "${urlUri}"`],
-      [/from '@\/lib\/connect'/g, `from "${connectUri}"`],
       [/from '@react-native-async-storage\/async-storage'/g, `from "${asyncStorageStubUri}"`],
       [/from 'expo-crypto'/g, `from "${cryptoStubUri}"`],
       [/from 'expo-secure-store'/g, `from "${secureStoreStubUri}"`],
@@ -130,7 +127,6 @@ describe('connection profiles', () => {
       mutateConnectionProfiles,
       resolveConnectionCredentials,
       saveProfilePassword,
-      saveConnectProfile,
       toConnectionProfile,
     } = await import(connectionProfilesUri);
 
@@ -317,58 +313,6 @@ describe('connection profiles', () => {
       g.__profilesTestPlatformOS = 'android';
     }
 
-    // Connect re-pairing replaces only this control-plane/machine's profile and
-    // removes the previous secret. Metadata remains explicit and password-free.
-    {
-      resetStorage();
-      const claim = { server_url: 'https://m.example.test', machine_id: 'machine-1', machine_name: 'My Mac', device_id: 'device-1', device_secret: 'signed-secret-1', expires_at: new Date(Date.now() + 60_000).toISOString() };
-      const first = await saveConnectProfile('https://api.opencodecloud.link', claim);
-      assert.equal(await resolveConnectionPassword(first), 'signed-secret-1');
-      assert.deepEqual(await resolveConnectionCredentials(first), { password: 'signed-secret-1', headers: {}, connect: first.connect }, 'Background clients must carry expiry metadata into their fetch guard.');
-      const next = await saveConnectProfile('https://api.opencodecloud.link', { ...claim, device_id: 'device-2', device_secret: 'signed-secret-2' });
-      assert.equal(next.id, first.id, 'Credential rotation preserves user-visible profile identity.');
-      assert.equal(findMatchingProfile([first], next)?.id, first.id, 'Rotated Cloud Link usernames still match the saved machine.');
-      assert.equal(findMatchingProfile([first], { ...next, connect: { ...next.connect, machineId: 'another-machine' } }), undefined);
-      assert.equal(findMatchingProfile([first], { ...next, connect: { ...next.connect, controlPlaneUrl: 'https://apistaging.opencodecloud.link' } }), undefined);
-      assert.equal(findMatchingProfile([first], { serverUrl: first.serverUrl, username: next.username }), undefined, 'Manual identities still require an exact credential scope.');
-      assert.equal(next.connect.machineId, first.connect.machineId);
-      assert.equal(next.serverUrl, first.serverUrl);
-      assert.equal(await getProfilePassword(first.id), 'signed-secret-2');
-      assert.deepEqual(await loadConnectionProfiles(), [next]);
-      assert.equal(await resolveConnectionPassword(next), 'signed-secret-2');
-      for (const value of g.__profilesTestAsyncStorage.values()) assert.ok(!value.includes('signed-secret'));
-      assert.equal(toConnectionProfile({ ...next, connect: { ...next.connect, expiresAt: 'bad' } }), undefined);
-      assert.equal(toConnectionProfile({ ...next, username: 'another-device' }), undefined);
-      await setActiveConnection({ serverUrl: next.serverUrl, username: next.username, connect: next.connect });
-      await secureStore.setItemAsync(passwordStorageKey, 'signed-secret-2');
-      await assert.rejects(saveConnectProfile('https://api.opencodecloud.link', { ...claim, server_url: 'https://replacement.example.test' }), /machine_hostname_mismatch/);
-
-      await saveConnectionProfiles([{ ...next, connect: { ...next.connect, expiresAt: '2000-01-01T00:00:00Z' } }]);
-      assert.equal(await resolveConnectionPassword(next), undefined, 'Expired profiles cannot fall back to active credentials.');
-      await saveConnectionProfiles([]);
-      await setActiveConnection({ serverUrl: next.serverUrl, username: next.username, connect: { ...next.connect, expiresAt: '2000-01-01T00:00:00Z' } });
-      assert.equal(await resolveConnectionPassword(next), undefined, 'Active-only Connect credentials also enforce expiry.');
-
-      // A failed metadata write rolls back the new secret and keeps the old profile.
-      resetStorage();
-      const kept = await saveConnectProfile('https://api.opencodecloud.link', claim);
-      const originalSet = asyncStorage.setItem;
-      asyncStorage.setItem = async (key: string, value: string) => {
-        if (key === storageKeys.CONNECTION_PROFILES_STORAGE_KEY) throw new Error('disk full');
-        return originalSet(key, value);
-      };
-      await assert.rejects(saveConnectProfile('https://api.opencodecloud.link', { ...claim, device_id: 'replacement' }), /disk full/);
-      asyncStorage.setItem = originalSet;
-      assert.deepEqual(await loadConnectionProfiles(), [kept]);
-      assert.equal(g.__profilesTestSecureStore.size, 1);
-      const originalGet = asyncStorage.getItem;
-      asyncStorage.getItem = async () => { throw new Error('storage unavailable'); };
-      await assert.rejects(saveConnectProfile('https://api.opencodecloud.link', claim), /storage unavailable/);
-      asyncStorage.getItem = originalGet;
-      assert.deepEqual(await loadConnectionProfiles(), [kept]);
-      assert.equal(g.__profilesTestSecureStore.size, 1, 'A read failure cannot overwrite existing profiles or secrets.');
-    }
-
     // Manual credentials, Cloud Link and preference writes share one transaction.
     {
       resetStorage();
@@ -383,7 +327,12 @@ describe('connection profiles', () => {
         await save(stored.map((profile: any) => ({ ...profile, name: 'Edited' })));
       });
       await entered.promise;
-      const cloud = saveConnectProfile('https://api.opencodecloud.link', { server_url: 'https://cloud.test', machine_id: 'machine', machine_name: 'Cloud', device_id: 'device', device_secret: 'cloud-secret', expires_at: new Date(Date.now() + 60_000).toISOString() });
+      const cloud = mutateConnectionProfiles(async (stored: any, save: any) => {
+        const profile = { id: 'cloud', name: 'Cloud', serverUrl: 'https://cloud.test', username: 'device' };
+        await saveProfilePassword(profile.id, 'cloud-secret');
+        await save([...stored, profile]);
+        return profile;
+      });
       const preferences = mutateConnectionProfiles(async (stored: any, save: any) => save(stored.map((profile: any) => profile.id === 'manual' ? { ...profile, modelPreferences: { modelId: 'model' } } : profile)));
       credential.resolve(); await Promise.all([edit, cloud, preferences]);
       const stored = await loadConnectionProfiles();

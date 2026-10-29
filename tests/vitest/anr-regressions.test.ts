@@ -52,6 +52,7 @@ describe('ANR regression checks', () => {
       '@/lib/compare-labels': labels,
       '@/lib/opencode/contracts/server-adapter': adapter,
       '@/providers/opencode-model-selection': selection,
+      '@/lib/hermes/mapping': { toModelOptions: () => [] },
     });
     const names = ['Éclair', 'alpha', 'Alpha', ...Array.from({ length: 2000 }, (_, i) => `Model ${2000 - i}`)];
     const models = Object.fromEntries(names.map((name, i) => [String(i), {

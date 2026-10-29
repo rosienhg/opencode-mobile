@@ -25,9 +25,9 @@ async function loadPasswordModule(platform: 'android' | 'ios' | 'web' = 'android
       deleteItemAsync: async (key: string) => { secure.delete(key); },
     },
     'react-native': { Platform: { OS: platform } },
-    '@/lib/connect': {
-      getConnectTestSecret: (key: string) => connectSecrets.get(key) ?? '',
-      setConnectTestSecret: (key: string, value: string) => { connectSecrets.set(key, value); },
+    '@/lib/secure-web-store': {
+      getWebSecret: (key: string) => connectSecrets.get(key) ?? '',
+      setWebSecret: (key: string, value: string) => { connectSecrets.set(key, value); },
     },
     '@react-native-async-storage/async-storage': {
       __esModule: true,

@@ -14,7 +14,7 @@ async function form(onSubmit = vi.fn()) {
   const connectionHeaders = await loadTs('lib/connection-headers.ts', {
     'expo-secure-store': { getItemAsync: async () => null, setItemAsync: async () => {}, deleteItemAsync: async () => {} },
     'react-native': { Platform: { OS: 'web' } },
-    '@/lib/connect': { getConnectTestSecret: () => '', setConnectTestSecret: () => {} },
+    '@/lib/secure-web-store': { getWebSecret: () => '', setWebSecret: () => {} },
   });
   const { ConnectionProfileDialog } = await loadTs('components/settings/connection-profile-dialog.tsx', {
     react: runtime.react,

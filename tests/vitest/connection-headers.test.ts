@@ -15,9 +15,9 @@ async function loadHeadersModule(platform: 'android' | 'ios' | 'web' = 'android'
       deleteItemAsync: async (key: string) => { secure.delete(key); },
     },
     'react-native': { Platform: { OS: platform } },
-    '@/lib/connect': {
-      getConnectTestSecret: (key: string) => connectSecrets.get(key) ?? '',
-      setConnectTestSecret: (key: string, value: string) => { if (value) connectSecrets.set(key, value); else connectSecrets.delete(key); },
+    '@/lib/secure-web-store': {
+      getWebSecret: (key: string) => connectSecrets.get(key) ?? '',
+      setWebSecret: (key: string, value: string) => { if (value) connectSecrets.set(key, value); else connectSecrets.delete(key); },
     },
   });
   return { module, secure, connectSecrets };

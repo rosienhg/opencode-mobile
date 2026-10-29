@@ -21,6 +21,7 @@ import {
   hermesSessionStatus,
 } from '@/lib/hermes/mapping';
 import { isTerminalRunEvent, type ClarifyEntry, type LiveToolCall, type RunEvent } from '@/lib/hermes/wire';
+import { buildHermesLiveRecords } from '@/providers/hermes-live-records';
 
 export type HermesPromptQueueEntry = { id: string; sessionId: string; text: string; createdAt: number };
 
@@ -72,7 +73,6 @@ export function useHermesRuns(input: HermesRunsInput) {
     online,
     currentSessionId,
     refreshMessages,
-    refreshSessions,
     setSessionStatuses,
     setPendingPermissionsBySession,
     setPendingQuestionsBySession,
@@ -121,98 +121,13 @@ export function useHermesRuns(input: HermesRunsInput) {
   // assistant turn when it finishes; while the run is live the transcript must
   // render the streamed state instead.
 
-  const buildLiveRecords = useCallback((run: HermesRunView): SessionMessageRecord[] => {
-    const active = run.state;
-    const pendingId = `pending-${run.runId}`;
-    const records: SessionMessageRecord[] = [];
-    records.push({
-      info: {
-        id: pendingId,
-        sessionID: run.sessionId,
-        role: 'user',
-        time: { created: run.startedAt },
-      } as SessionMessageRecord['info'],
-      parts: [{
-        id: `${pendingId}-text`,
-        sessionID: run.sessionId,
-        messageID: pendingId,
-        type: 'text',
-        text: run.prompt,
-      }],
-    });
-    if (active.streamedText || active.reasoning.length > 0 || active.tools.length > 0 || active.interim.length > 0) {
-      const liveId = `live-${run.runId}`;
-      const parts: SessionMessageRecord['parts'] = [];
-      active.reasoning.forEach((text, index) => {
-        parts.push({
-          id: `${liveId}-reasoning-${index}`,
-          sessionID: run.sessionId,
-          messageID: liveId,
-          type: 'reasoning',
-          text,
-        });
-      });
-      if (active.streamedText) {
-        parts.push({
-          id: `${liveId}-text`,
-          sessionID: run.sessionId,
-          messageID: liveId,
-          type: 'text',
-          text: active.streamedText,
-        });
-      }
-      active.tools.forEach((tool, index) => {
-        let toolInput: Record<string, unknown> = {};
-        if (tool.fullArgs) {
-          try {
-            const parsed = JSON.parse(tool.fullArgs);
-            if (parsed && typeof parsed === 'object') toolInput = parsed as Record<string, unknown>;
-          } catch {
-            toolInput = { raw: tool.fullArgs };
-          }
-        }
-        parts.push({
-          id: `${liveId}-tool-${index}`,
-          sessionID: run.sessionId,
-          messageID: liveId,
-          type: 'tool',
-          callID: `${liveId}-${index}`,
-          tool: tool.tool,
-          state: tool.status === 'failed'
-            ? { status: 'error', input: toolInput, error: tool.preview ?? 'failed' }
-            : {
-                status: 'completed',
-                input: toolInput,
-                output: tool.preview ?? '',
-                time: tool.duration !== undefined ? { start: run.startedAt, end: run.startedAt + tool.duration * 1000 } : undefined,
-              },
-        });
-      });
-      const text = [active.interim.join('\n\n'), active.streamedText].filter(Boolean).join('\n\n');
-      if (text) {
-        records.push({
-          info: {
-            id: liveId,
-            sessionID: run.sessionId,
-            role: 'assistant',
-            providerID: '',
-            modelID: '',
-            time: { created: run.startedAt },
-          } as SessionMessageRecord['info'],
-          parts,
-        });
-      }
-    }
-    return records;
-  }, []);
-
   const liveRecordsBySession = useMemo(() => {
     const result: Record<string, SessionMessageRecord[]> = {};
     for (const run of Object.values(runs)) {
-      result[run.sessionId] = buildLiveRecords(run);
+      result[run.sessionId] = buildHermesLiveRecords(run);
     }
     return result;
-  }, [runs, buildLiveRecords]);
+  }, [runs]);
 
   // Texts of prompts whose user record may not be on the server yet.
   const pendingUserTexts = useMemo(() => {
@@ -378,6 +293,9 @@ export function useHermesRuns(input: HermesRunsInput) {
   const runsMirrorRef = useRef(runs);
   useLayoutEffect(() => { runsMirrorRef.current = runs; });
   const runsRef_get = useCallback((sessionId: string): HermesRunView | undefined => runsMirrorRef.current[sessionId], []);
+  const queueMirrorRef = useRef(promptQueueBySession);
+  useLayoutEffect(() => { queueMirrorRef.current = promptQueueBySession; });
+  const getQueue = useCallback((sessionId: string): HermesPromptQueueEntry[] => queueMirrorRef.current[sessionId] ?? [], []);
 
   const stopRun = useCallback(async (sessionId: string) => {
     const run = runsRef_get(sessionId);
@@ -389,7 +307,7 @@ export function useHermesRuns(input: HermesRunsInput) {
       // A 404 means the run already ended; the stream will confirm shortly.
       if ((error as HermesError).status !== 404) throw error;
     }
-  }, [client, publishState]);
+  }, [client, publishState, runsRef_get]);
 
   const answerApproval = useCallback(async (sessionId: string, requestId: string, choice: 'once' | 'always' | 'reject') => {
     const run = runsRef_get(sessionId);
@@ -410,7 +328,7 @@ export function useHermesRuns(input: HermesRunsInput) {
         [sessionId]: (current[sessionId] ?? []).filter((entry) => entry.id !== requestId),
       }));
     }
-  }, [client, setPendingPermissionsBySession]);
+  }, [client, runsRef_get, setPendingPermissionsBySession]);
 
   // ---- Clarify -------------------------------------------------------------
 
@@ -523,12 +441,6 @@ export function useHermesRuns(input: HermesRunsInput) {
     }
     controllersRef.current.clear();
   }, [connected]);
-
-  const runsRef_get = useCallback((sessionId: string): HermesRunView | undefined => runsMirrorRef.current[sessionId], []);
-
-  const getQueue = useCallback((sessionId: string): HermesPromptQueueEntry[] => queueMirrorRef.current[sessionId] ?? [], []);
-  const queueMirrorRef = useRef(promptQueueBySession);
-  useLayoutEffect(() => { queueMirrorRef.current = promptQueueBySession; });
 
   const enqueuePrompt = useCallback((sessionId: string, text: string): HermesPromptQueueEntry => {
     queueCounterRef.current += 1;

@@ -1,6 +1,3 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import nodeCrypto from 'node:crypto';
-
 vi.mock('expo/fetch', () => ({ fetch: (...args: unknown[]) => (globalThis.fetch as unknown as (...a: unknown[]) => Promise<Response>)(...args) }));
 vi.mock('expo-constants', () => ({ default: { expoConfig: { extra: {} } } }));
 vi.mock('expo-crypto', () => {
@@ -15,11 +12,14 @@ vi.mock('expo-crypto', () => {
     digestStringAsync: async (_algorithm: string, value: string) => node.createHash('sha256').update(value).digest('base64'),
   };
 });
-
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import nodeCrypto from 'node:crypto';
 import { createPkcePair } from '@/lib/hermes/pkce';
 import { HermesError, parseHermesErrorBody } from '@/lib/hermes/errors';
 import { applyLiveToolCalls, applyRunEvent, activeRunFailureMessage, createActiveRun, decodeRunEvent } from '@/lib/hermes/run';
 import { readSseStream } from '@/lib/hermes/sse';
+import { HermesHttpClient } from '@/lib/hermes/http';
+import type { RunEvent } from '@/lib/hermes/wire';
 import {
   approvalToPendingPermission,
   clarifyAnswerToWire,
@@ -29,8 +29,6 @@ import {
   toModelOptions,
   toSessionView,
 } from '@/lib/hermes/mapping';
-import { HermesHttpClient } from '@/lib/hermes/http';
-import type { RunEvent } from '@/lib/hermes/wire';
 
 describe('hermes pkce', () => {
   it('builds an S256 challenge from a padded-free base64url verifier', async () => {
