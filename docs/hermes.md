@@ -66,9 +66,10 @@ Covered by `tests/vitest/hermes-protocol.test.ts` (pure logic) and
   shape only where noted; no screens yet.
 - **Widget + share-in are OpenCode-era** — they run but their notifications
   surface may need Hermes tuning.
-- **Playwright e2e** — upstream specs still target the OpenCode fake servers;
-  rebuild the core flows (connect/chat/clarify/credentials) against
-  `tests/fake-hermes/`.
+- **Playwright e2e** — `tests/e2e/hermes.spec.mjs` now covers the core Hermes
+  flow (sign-in, streamed chat, clarify, credentials) against the fake server.
+  The remaining upstream specs still target the OpenCode fakes and need
+  rebuilding or removal.
 - **Locale translations** — new strings ship as English everywhere; parity is
   enforced, translations welcome.
 
