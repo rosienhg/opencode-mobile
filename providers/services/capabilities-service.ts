@@ -3,6 +3,7 @@ import type { Config, ProviderCatalog, ProviderAuthMethod, ProviderAuthPrompt, P
 import { compareLabels } from '@/lib/compare-labels';
 import type { ProviderAccountInfo, ScopedOpencodeClient } from '@/lib/opencode/client';
 import { getConfiguredProviderIds, toAgentOption, type ModelOption } from '@/providers/opencode-model-selection';
+import { toModelOptions } from '@/lib/hermes/mapping';
 import { createServerAdapter } from '@/lib/opencode/contracts/server-adapter';
 
 const PROMPT_TYPES: ProviderAuthPrompt['type'][] = ['text', 'select', 'number', 'integer', 'boolean', 'multiselect', 'external'];
@@ -81,6 +82,27 @@ function uniqueById<T extends { id: string }>(items: T[]) {
 }
 
 export async function discoverChatCapabilities(client: ScopedOpencodeClient, activeProjectPath?: string) {
+  if (client.hermes) {
+    // Hermes discovery: models come from the gateway's model options and the
+    // composer's slash commands from the plugin's skill list. Provider
+    // credential management is a server-side concern on Hermes.
+    const [modelOptions, skillCommands] = await Promise.all([
+      client.hermes.api.getModelOptions().catch(() => ({ providers: [] })),
+      client.hermes.api.listSkillCommands().catch(() => []),
+    ]);
+    const models = toModelOptions(modelOptions);
+    return {
+      config: undefined,
+      providers: [],
+      providerAuthMethodsById: {},
+      models,
+      agents: [],
+      skills: [],
+      references: [],
+      connected: [],
+      configuredModels: models,
+    };
+  }
   if (!activeProjectPath) {
     return {
       config: undefined,

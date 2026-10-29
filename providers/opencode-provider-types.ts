@@ -21,14 +21,11 @@ import type {
 } from '@/lib/opencode/types';
 import type {
   ConnectionFailureKind,
-  ManagedService,
   OpencodeConnectionSettings,
   PendingPermission,
   PendingQuestion,
   PendingQuestionAnswer,
   SavedPermissionRule,
-  ServiceInput,
-  ServiceManagementVersion,
 } from '@/lib/opencode/client';
 import type { Diagnostics } from '@/providers/services/diagnostics-service';
 import type { NetworkStatus } from '@/lib/network-status';
@@ -210,39 +207,27 @@ export type ServiceManagementTarget = {
 // Why no usable services surface exists right now.
 export type ServiceManagementUnavailableReason = 'no-cloud-link-machine' | 'credentials-expired';
 
-// Remote connector service management. Folded into the connection domain so the
-// provider keeps a single context entry for it; consumers read `services` and
-// call the actions it exposes. `available` is false while resolving, when no
-// Cloud Link machine is saved, or when its credentials expired.
+// Remote connector service management was a Cloud Link surface and is gone;
+// the context member stays so the connection domain keeps one shape.
 export type ServiceManagementApi = {
-  services: ManagedService[];
-  // Connector-reported management revision and port pool; undefined until the
-  // first refresh answers. `api < 2` (or an unknown older connector) is legacy
-  // path-only mode with an update hint instead of the port picker.
-  version?: ServiceManagementVersion;
-  available: boolean;
-  target?: ServiceManagementTarget;
-  machines: ServiceManagementMachine[];
-  unavailableReason?: ServiceManagementUnavailableReason;
+  services: never[];
+  available: false;
+  machines: never[];
   isRefreshing: boolean;
   isSaving: boolean;
   refresh: () => Promise<void>;
-  save: (id: string, input: ServiceInput) => Promise<ManagedService>;
+  save: () => Promise<never>;
   remove: (id: string) => Promise<void>;
-  // Switch the services target machine (saved Cloud Link profiles).
   selectMachine: (id: string) => void;
-  // Reconnect the target machine's Cloud Link access; also makes it the active
-  // connection because fresh device credentials come from machine access.
   activateTarget: () => Promise<boolean>;
 };
 
 export type ConnectionContextValue = {
   connectionProfiles: import('@/providers/use-connection-profiles').ConnectionProfilesState;
-  connectSetup: import('@/providers/use-connect-state').ConnectSetup;
   settings: OpencodeConnectionSettings;
   updateSettings: (patch: Partial<OpencodeConnectionSettings>) => void;
   switchConnection: (
-    next: Pick<OpencodeConnectionSettings, 'serverUrl' | 'username' | 'password' | 'headers' | 'connect'>,
+    next: Pick<OpencodeConnectionSettings, 'serverUrl' | 'username' | 'password'>,
     modelPreferences?: Partial<ChatPreferences>,
   ) => Promise<ConnectionState>;
   connection: ConnectionState;

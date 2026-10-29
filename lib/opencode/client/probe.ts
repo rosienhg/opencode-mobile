@@ -48,8 +48,16 @@ export async function probeConnection(settings: OpencodeConnectionSettings, sign
     probeJson(base.origin, prefixWithoutApi, '/api/info', settings, signal),
     probeJson(base.origin, prefixWithoutApi, '/api/health', settings, signal),
     probeJson(base.origin, base.pathPrefix, '/global/health', settings, signal),
+    probeJson(base.origin, base.pathPrefix, '/api/auth/providers', settings, signal),
   ]);
-  const [info, apiHealth, health] = responses.map((response) => response?.body);
+  const [info, apiHealth, health, authProviders] = responses.map((response) => response?.body);
+
+  // A Hermes dashboard answers /api/auth/providers with its provider list
+  // without requiring authentication — checked first so an OpenCode-shaped
+  // route on the same host cannot shadow it.
+  if (authProviders && Array.isArray(authProviders.providers)) {
+    return { status: 'detected', contract: 'hermes' as ServerContract };
+  }
 
   const v1Health = [health, apiHealth, info].find((body) => typeof body?.version === 'string' && /^1\./.test(body.version))?.version as string | undefined;
   // V2 exposes a ServerInfo at /api/info ({ version, pid, urls, paths }); require that

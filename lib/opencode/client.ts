@@ -1,6 +1,7 @@
 import { buildV1Compatibility } from './compat/v1/client';
 
 import { buildV2Client } from './v2-client';
+import { getHermesClient } from '@/lib/hermes/client';
 import { joinUrlPath, normalizeServerUrl } from './client/url';
 import type { OpencodeConnectionSettings, ScopedOpencodeClient, ServerContract } from './client/types';
 
@@ -24,27 +25,6 @@ export {
   getServerBase,
 } from './client/url';
 export { getRequestHeaders, createPrefixFetch } from './client/fetch';
-export {
-  DEFAULT_SERVICES_PORT,
-  MAX_MANAGED_SERVICES,
-  buildServiceShareUrl,
-  formatServiceAddress,
-  getServicePortOptions,
-  prepareServiceDraft,
-  type ManagedService,
-  type ServiceDraft,
-  type ServiceDraftErrors,
-  type ServiceInput,
-  type ServiceManagementVersion,
-  type ServicePortOption,
-} from './client/management';
-export {
-  ServiceManagementError,
-  deleteManagedService,
-  getServiceManagementVersion,
-  listManagedServices,
-  putManagedService,
-} from './client/management-api';
 export { getConnectionError, isContractMismatchError, isRetryableCloudLinkStartupError, classifyConnectionFailure, isAuthConnectionFailure, type ConnectionFailureKind } from './client/errors';
 export { detectServerContract, type ConnectionProbeResult } from './client/probe';
 export {
@@ -57,6 +37,14 @@ export {
 } from './client/interactions';
 
 export function buildClient(settings: OpencodeConnectionSettings, contract: ServerContract = 'v2'): ScopedOpencodeClient {
+  if (contract === 'hermes') {
+    // Hermes clients are pooled per identity so every consumer (provider
+    // runtime, notification monitor, widgets) shares one auth/refresh state.
+    return {
+      hermes: getHermesClient({ serverUrl: settings.serverUrl, username: settings.username }),
+      __opencode: { contract, directory: undefined },
+    };
+  }
   if (contract === 'v2') return buildV2Client(settings);
   return { compatibility: buildV1Compatibility(settings), __opencode: { contract, directory: settings.directory.trim() || undefined } };
 }

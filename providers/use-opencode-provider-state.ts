@@ -10,7 +10,6 @@ import {
 } from '@/lib/opencode/client';
 import { getConnectionScope } from '@/lib/connection-scope';
 import type { SessionMessageRecord } from '@/lib/opencode/format';
-import { getConnectControlPlanes } from '@/lib/connect';
 import type { ProjectFile } from '@/lib/opencode/project-file';
 import type {
   Command,
@@ -41,7 +40,6 @@ import type { Diagnostics } from '@/providers/services/diagnostics-service';
 
 export function useOpencodeProviderState(initial?: { settings: OpencodeConnectionSettings; projectPath?: string }) {
   const [settings, setSettings] = useState<OpencodeConnectionSettings>(initial?.settings ?? defaultConnectionSettings);
-  const [controlPlaneUrl, setControlPlaneUrl] = useState(() => getConnectControlPlanes()[0] ?? '');
   const [connection, setConnection] = useState<ConnectionState>({
     status: 'idle',
     message: 'Add a server URL and connect to OpenCode.',
@@ -144,7 +142,6 @@ export function useOpencodeProviderState(initial?: { settings: OpencodeConnectio
 
   return {
     settings, setSettings,
-    controlPlaneUrl, setControlPlaneUrl,
     connection, setConnection,
     serverContract, setServerContract,
     activeProjectPath, setActiveProjectPath,

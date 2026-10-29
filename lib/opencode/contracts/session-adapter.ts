@@ -11,6 +11,12 @@ import { toMessageRecord } from '@/lib/opencode/v2/mappers';
 import type { Command, FileDiff, Project, Session, SessionStatus, Todo } from '@/lib/opencode/types';
 import * as v1 from '@/lib/opencode/compat/v1/session';
 import { listWorktrees as listV1Worktrees } from '@/lib/opencode/compat/v1/project';
+import {
+  isListedSession,
+  skillCommandToCommand,
+  toMessageRecords,
+  toSessionView as toHermesSessionView,
+} from '@/lib/hermes/mapping';
 
 export type ResolvedProjectLocation = Project & { directory?: string };
 export type SessionMessagePage = { records: SessionMessageRecord[]; hasMore: boolean; nextBefore?: string };
@@ -47,6 +53,81 @@ export type SessionAdapter = {
 
 const MAX_SESSION_PAGES = 10;
 
+// Hermes has no project/directory concept: one connection is one workspace.
+const HERMES_PROJECT: Project = { id: 'hermes', worktree: '', name: 'Hermes', time: { created: 0 } };
+
+// The Hermes branch of the session adapter. Sessions, messages, runs, and
+// approvals all flow through the hermes-ios plugin's gateway proxy.
+function createHermesSessionAdapter(client: ScopedOpencodeClient): SessionAdapter {
+  const hermes = client.hermes!;
+  const api = hermes.api;
+
+  const activeRunId = async (sessionId: string): Promise<string | undefined> => {
+    try {
+      const active = await api.getActiveRun(sessionId);
+      return active.run_id ?? undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  return {
+    submitPrompt: async () => {
+      throw new Error('Hermes runs are started through the run API, not prompt admission.');
+    },
+    loadProjectCatalog: async () => ({ currentProjectPath: '', serverRootPath: '', serverProjects: [HERMES_PROJECT] }),
+    resolveProjectLocation: async () => ({ ...HERMES_PROJECT, directory: '' }),
+    isKnownProjectLocation: async () => false,
+    isAvailableProjectDirectory: async () => false,
+    activeStatuses: async () => ({}),
+    list: () => coalesceRead(client, 'hermes:sessions', async () => {
+      const records = await api.listSessions(200);
+      const sessions = records.filter(isListedSession)
+        .map(toHermesSessionView)
+        .sort((a, b) => b.time.updated - a.time.updated);
+      const statuses: Record<string, SessionStatus> = {};
+      for (const session of sessions) statuses[session.id] = { type: 'idle' };
+      return { sessions, statuses };
+    }),
+    messages: (sessionId, options = {}) => {
+      const limit = Math.min(options.limit ?? TRANSCRIPT_PAGE_LIMIT, MAX_MESSAGE_PAGE_LIMIT);
+      const read = async (): Promise<SessionMessagePage> => {
+        const messages = await api.listMessages(sessionId);
+        const records = toMessageRecords(messages, sessionId);
+        // Hermes returns the full transcript; the window is the tail.
+        const page = limit < records.length ? records.slice(-limit) : records;
+        return { records: page, hasMore: false, nextBefore: undefined };
+      };
+      if (options.fresh) return read();
+      return coalesceRead(client, `hermes:messages:${sessionId}:${limit}`, read);
+    },
+    diff: async () => [],
+    todos: async () => [],
+    create: async () => toHermesSessionView(await api.createSession()),
+    remove: (sessionId) => api.deleteSession(sessionId),
+    updateTitle: async (sessionId, title) => {
+      await api.renameSession(sessionId, title);
+      return toHermesSessionView(await api.getSession(sessionId));
+    },
+    fork: async (sessionId) => toHermesSessionView(await api.forkSession(sessionId)),
+    revert: async () => undefined,
+    unrevert: async () => undefined,
+    interrupt: async (sessionId) => {
+      const runId = await activeRunId(sessionId);
+      if (!runId) return;
+      await api.stopRun(runId);
+    },
+    commands: async () => (await api.listSkillCommands()).map(skillCommandToCommand),
+    executeCommand: async (sessionId, command, args) => {
+      const expanded = await api.expandSkillCommand(`/${command}${args ? ` ${args}` : ''}`);
+      await api.startRun({ input: expanded.input, session_id: sessionId });
+    },
+    executeShell: async () => {
+      throw new Error('Hermes has no shell surface.');
+    },
+  };
+}
+
 async function listV2Sessions(api: NativeOpencodeApi, directory?: string): Promise<SessionInfo[]> {
   const scope = directory ? { directory } : {};
   const records: SessionInfo[] = [];
@@ -69,6 +150,7 @@ async function listV2Sessions(api: NativeOpencodeApi, directory?: string): Promi
 }
 
 export function createSessionAdapter(client: ScopedOpencodeClient): SessionAdapter {
+  if (client.hermes) return createHermesSessionAdapter(client);
   const compatibility = client.compatibility;
   const directory = client.__opencode.directory;
 

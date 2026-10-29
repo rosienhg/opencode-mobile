@@ -1,7 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-import { getConnectTestSecret, setConnectTestSecret } from '@/lib/connect';
+import { getWebSecret, setWebSecret } from '@/lib/secure-web-store';
 
 // Custom request headers are credentials for gateways in front of the server
 // (Cloudflare Access service tokens, Authelia, oauth2-proxy, corporate proxies).
@@ -99,7 +99,7 @@ export function sameConnectionHeaders(left: ConnectionHeaders | undefined, right
 
 async function readSecret(key: string) {
   try {
-    if (Platform.OS === 'web') return getConnectTestSecret(key);
+    if (Platform.OS === 'web') return getWebSecret(key);
     return (await SecureStore.getItemAsync(key)) ?? '';
   } catch {
     return '';
@@ -108,7 +108,7 @@ async function readSecret(key: string) {
 
 async function writeSecret(key: string, value: string) {
   if (Platform.OS === 'web') {
-    setConnectTestSecret(key, value);
+    setWebSecret(key, value);
     return;
   }
   if (value) {

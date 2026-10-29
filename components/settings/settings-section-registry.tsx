@@ -10,7 +10,6 @@ import { McpSection } from '@/components/settings/mcp-section';
 import { ExtensionsSection } from '@/components/settings/extensions-section';
 import { EditorSection } from '@/components/settings/sections/editor-section';
 import { ConnectionSection } from '@/components/settings/sections/connection-section';
-import { CloudLinkSection } from '@/components/settings/sections/cloud-link-section';
 import { DiagnosticsSection } from '@/components/settings/sections/diagnostics-section';
 import { GeneralSection } from '@/components/settings/sections/general-section';
 import { NotificationsSection } from '@/components/settings/sections/notifications-section';
@@ -44,8 +43,6 @@ type RegistryInput = {
   t: TFunction;
   palette: ReturnType<typeof usePalette>;
   connection: ReturnType<typeof useConnection>['connection'];
-  connectSetup: ReturnType<typeof useConnection>['connectSetup'];
-  serviceManagement: ReturnType<typeof useConnection>['services'];
   configuredProviders: ReturnType<typeof useCapabilities>['configuredProviders'];
   currentConfig: ReturnType<typeof useCapabilities>['currentConfig'];
   mcp: ReturnType<typeof useMcp>;
@@ -70,15 +67,12 @@ type RegistryInput = {
   advancedTab: 'mcp' | 'diagnostics';
   setAdvancedTab: (tab: 'mcp' | 'diagnostics') => void;
   setOpenSection: (id?: string) => void;
-  openServiceEditor: (id?: string) => void;
 };
 
 export function buildSettingsSections({
   t,
   palette,
   connection,
-  connectSetup,
-  serviceManagement,
   configuredProviders,
   currentConfig,
   mcp,
@@ -103,7 +97,6 @@ export function buildSettingsSections({
   advancedTab,
   setAdvancedTab,
   setOpenSection,
-  openServiceEditor,
 }: RegistryInput): SettingsSection[] {
   const voicePhrase = chatPreferences.voiceWakeMode === 'local'
     ? LOCAL_WAKE_PHRASES[chatPreferences.localWakePhrase].label
@@ -131,7 +124,7 @@ export function buildSettingsSections({
       summary: connection.status === 'connected' ? t('common:labels.connected') : connection.message,
       summaryLines: 2,
       onPress: () => setOpenSection('connection'),
-      render: () => <ConnectionSection connection={connection} palette={palette} onManageConnect={connectSetup.enabled ? () => { setOpenSection(undefined); router.push('/pair?mode=manage'); } : undefined} onPair={connectSetup.enabled ? () => { setOpenSection(undefined); router.push('/pair'); } : undefined} />,
+      render: () => <ConnectionSection connection={connection} palette={palette} />,
     },
     {
       id: 'ai',
@@ -148,14 +141,6 @@ export function buildSettingsSections({
       summary: t('settings:screen.summaries.extensions'),
       onPress: () => setOpenSection('extensions'),
       render: () => <ExtensionsSection />,
-    }] : []),
-    ...(connectSetup.enabled && connectSetup.storeInstall ? [{
-      id: 'cloud-link',
-      icon: 'cloud-outline' as const,
-      title: t('settings:screen.categories.cloudLink'),
-      summary: connectSetup.initialization === 'loading' ? t('settings:connect.progress.idle') : connectSetup.entitled ? t('common:labels.active') : t('settings:subscription.inactive'),
-      onPress: () => { setOpenSection('cloud-link'); void serviceManagement.refresh(); },
-      render: () => <CloudLinkSection setup={connectSetup} services={serviceManagement} palette={palette} onManageMachines={() => { setOpenSection(undefined); router.push('/pair?mode=manage'); }} onAddService={() => openServiceEditor()} onEditService={(service) => openServiceEditor(service.id)} />,
     }] : []),
     {
       id: 'notifications',

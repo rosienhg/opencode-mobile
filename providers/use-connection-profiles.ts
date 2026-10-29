@@ -5,7 +5,6 @@ import { deleteProfileHeaders, getProfileHeaders, saveProfileHeaders, type Conne
 import type { ConnectionContextValue } from '@/providers/opencode-provider-types';
 import { probeConnection } from '@/lib/opencode/client/probe';
 import { getServerHostname, normalizeServerUrl } from '@/lib/opencode/client/url';
-import { resolveLocalPairing } from '@/lib/opencode/pairing';
 
 export type ConnectionProfileInput = Pick<ConnectionProfile, 'name' | 'serverUrl' | 'username'> & {
   password: string;
@@ -14,7 +13,7 @@ export type ConnectionProfileInput = Pick<ConnectionProfile, 'name' | 'serverUrl
 
 export type ConnectionProfileSecrets = { password: string; headers: ConnectionHeaders };
 
-export function useConnectionProfiles({ settings, switchConnection, updateSettings, profileSnapshot, onSaved, onRemoved }: Pick<ConnectionContextValue, 'settings' | 'switchConnection' | 'updateSettings'> & { profileSnapshot: ConnectionProfile[]; onSaved?: (profile: ConnectionProfile, secrets: ConnectionProfileSecrets, previous?: ConnectionProfile) => void; onRemoved?: (profile: ConnectionProfile) => Promise<void> }) {
+export function useConnectionProfiles({ settings, switchConnection, updateSettings, onSaved, onRemoved }: Pick<ConnectionContextValue, 'settings' | 'switchConnection' | 'updateSettings'> & { onSaved?: (profile: ConnectionProfile, secrets: ConnectionProfileSecrets, previous?: ConnectionProfile) => void; onRemoved?: (profile: ConnectionProfile) => Promise<void> }) {
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
   const latest = useRef({ settings, switchConnection, updateSettings });
   useLayoutEffect(() => { latest.current = { settings, switchConnection, updateSettings }; });
@@ -30,19 +29,17 @@ export function useConnectionProfiles({ settings, switchConnection, updateSettin
   }), [mutate]);
   useEffect(() => {
     void refresh().catch((reason) => console.warn('Could not refresh connection profiles.', reason));
-  }, [profileSnapshot, refresh]);
+  }, [refresh]);
   const connect = useCallback(async (profile: ConnectionProfile) => {
-    const [password, headers] = await Promise.all([getProfilePassword(profile.id), getProfileHeaders(profile.id)]);
-    return latest.current.switchConnection({ serverUrl: profile.serverUrl, username: profile.username, password, headers, connect: profile.connect }, profile.modelPreferences);
+    const password = await getProfilePassword(profile.id);
+    return latest.current.switchConnection({ serverUrl: profile.serverUrl, username: profile.username, password }, profile.modelPreferences);
   }, []);
   const passwordForEditing = useCallback((id: string) => getProfilePassword(id), []);
   const headersForEditing = useCallback((id: string) => getProfileHeaders(id), []);
   const probe = useCallback((values: Pick<ConnectionProfileInput, 'serverUrl' | 'username' | 'password' | 'headers'>, signal?: AbortSignal) => probeConnection({ ...values, directory: '' }, signal), []);
-  const pair = useCallback((code: string, signal?: AbortSignal) => resolveLocalPairing(code, signal), []);
   const save = useCallback((values: ConnectionProfileInput, id?: string) => mutate(() => mutateConnectionProfiles(async (stored, saveMetadata) => {
     const previous = id ? stored.find((profile) => profile.id === id) : undefined;
     if (id && !previous) throw new Error('This connection profile is no longer available.');
-    if (previous?.connect) throw new Error('Manage this connection through Cloud Link.');
     const base = normalizeServerUrl(values.serverUrl);
     if (!values.serverUrl.trim() || !base.valid) throw new Error('Invalid server URL.');
     const name = values.name.trim() || getServerHostname(values.serverUrl);
@@ -76,7 +73,7 @@ export function useConnectionProfiles({ settings, switchConnection, updateSettin
     await deleteProfilePassword(id);
     await deleteProfileHeaders(id);
   })), [mutate, onRemoved]);
-  return useMemo(() => ({ profiles, refresh, connect, passwordForEditing, headersForEditing, probe, pair, save, remove }), [profiles, refresh, connect, passwordForEditing, headersForEditing, probe, pair, save, remove]);
+  return useMemo(() => ({ profiles, refresh, connect, passwordForEditing, headersForEditing, probe, save, remove }), [profiles, refresh, connect, passwordForEditing, headersForEditing, probe, save, remove]);
 }
 
 export type ConnectionProfilesState = ReturnType<typeof useConnectionProfiles>;

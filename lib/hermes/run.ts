@@ -36,6 +36,19 @@ export function createActiveRun(runId = ''): ActiveRun {
   return { runId, statusText: 'sending', streamedText: '', reasoning: [], interim: [], tools: [], approval: undefined, lastSeq: undefined, terminal: undefined };
 }
 
+// Copy-on-write snapshot for React state publication: applyRunEvent mutates in
+// place, so the streaming loop clones before each event.
+export function cloneRunState(run: ActiveRun): ActiveRun {
+  return {
+    ...run,
+    reasoning: [...run.reasoning],
+    interim: [...run.interim],
+    tools: run.tools.map((tool) => ({ ...tool })),
+    approval: run.approval ? { ...run.approval } : undefined,
+    terminal: run.terminal ? { ...run.terminal } : undefined,
+  };
+}
+
 export function decodeRunEvent(data: string): RunEvent | undefined {
   if (!data) return undefined;
   try {

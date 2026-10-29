@@ -45,7 +45,6 @@ export function useOpencodeProviderValues(input: ProviderValuesInput) {
     settings,
     connection,
     connectionProfiles,
-    connectSetup,
     updateSettings,
     switchConnection,
     connect,
@@ -282,8 +281,8 @@ export function useOpencodeProviderValues(input: ProviderValuesInput) {
   );
 
   const connectionValue = useMemo<ConnectionContextValue>(
-    () => ({ connectionProfiles, settings, updateSettings, switchConnection, connection, serverCapabilities, connect, connectSetup, services: servicesValue }),
-    [connectionProfiles, settings, updateSettings, switchConnection, connection, serverCapabilities, connect, connectSetup, servicesValue],
+    () => ({ connectionProfiles, settings, updateSettings, switchConnection, connection, serverCapabilities, connect, services: servicesValue }),
+    [connectionProfiles, settings, updateSettings, switchConnection, connection, serverCapabilities, connect, servicesValue],
   );
 
   const diagnosticsValue = useMemo<DiagnosticsContextValue>(

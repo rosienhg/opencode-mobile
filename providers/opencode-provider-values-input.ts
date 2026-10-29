@@ -136,4 +136,5 @@ export type ProviderValuesInput = ActionInputs & {
   mcpOAuth: import('./opencode-provider-types').McpContextValue['mcpOAuth'];
   extensions: ExtensionsContextValue['extensions'];
   sharedInput: SharedInput;
+  servicesValue: import('./opencode-provider-types').ServiceManagementApi;
 };

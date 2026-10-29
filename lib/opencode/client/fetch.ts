@@ -3,7 +3,6 @@ import { fetch as expoFetch } from 'expo/fetch';
 
 import { recordBytes, recordRequest } from '../data-usage';
 import { recordRequestStart } from '../request-stats';
-import { getConnectCredentialError } from '@/lib/connect';
 import { joinUrlPath } from './url';
 import type { OpencodeConnectionSettings } from './types';
 import { fetchWithReadDeadline } from './read-deadline';
@@ -57,24 +56,12 @@ async function performFetch(
     : await transport(input, init);
   recordRequest();
   measureResponseBytes(response);
-  if (settings?.connect && response.status === 401) throw new Error('Cloud Link credentials were rejected. Pair this device again.');
-  if (settings?.connect && response.status === 403) throw new Error('Cloud Link access was denied (403). Check your subscription or device credentials.');
-  // Some SDKs discard HTML error bodies, hiding Cloudflare's tunnel-startup code.
-  if (settings?.connect && !response.ok && /text\/(?:html|plain)/i.test(response.headers.get('content-type') ?? '')) {
-    const body = await response.clone().text();
-    if (/\b1033\b/.test(body)) throw new Error('Cloudflare Error 1033');
-  }
   return response;
 }
 
 export async function fetchConnection(input: RequestInfo | URL, init?: RequestInit, settings?: OpencodeConnectionSettings) {
-  if (settings?.connect) {
-    const error = getConnectCredentialError(settings.connect, settings.password);
-    if (error) throw new Error(error);
-  }
-  // RN's XHR ignores redirect rejection. Use Expo for Cloud Link and one-use
-  // local pairing requests; other manual connections retain their transport.
-  const transport = settings?.connect || init?.redirect === 'error'
+  // RN's XHR ignores redirect rejection; opt-in callers use Expo for strictness.
+  const transport = init?.redirect === 'error'
     ? (input: RequestInfo | URL, init?: RequestInit) => expoFetch(input, { ...init, redirect: 'error' })
     : fetch;
   const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;

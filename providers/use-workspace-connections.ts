@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { getConnectionScope, getConnectionUiScope } from '@/lib/connection-scope';
-import { createProfileId, findMatchingProfile, getProfilePassword, loadConnectionProfiles, mutateConnectionProfiles, saveProfilePassword, deleteProfilePassword, pickModelPreferences } from '@/lib/connection-profiles';
+import { createProfileId, findMatchingProfile, getProfilePassword, loadConnectionProfiles, mutateConnectionProfiles, saveProfilePassword, deleteProfilePassword, pickModelPreferences, type ConnectionProfile } from '@/lib/connection-profiles';
 import { deleteProfileHeaders, getProfileHeaders, saveProfileHeaders, type ConnectionHeaders } from '@/lib/connection-headers';
 import { getServerHostname } from '@/lib/opencode/client/url';
 import { defaultConnectionSettings, type OpencodeConnectionSettings } from '@/lib/opencode/client';
@@ -53,18 +53,15 @@ export function useWorkspaceConnections(shell: OpencodeProviderState, hydrated: 
 
   const saveProfile = useCallback(async (settings: OpencodeConnectionSettings) => mutateConnectionProfiles(async (profiles, save) => {
     const existing = findMatchingProfile(profiles, settings);
-    const profile = existing ?? { id: createProfileId(), name: getServerHostname(settings.serverUrl), serverUrl: settings.serverUrl, username: settings.username, connect: settings.connect };
+    const profile = existing ?? { id: createProfileId(), name: getServerHostname(settings.serverUrl), serverUrl: settings.serverUrl, username: settings.username };
     const previousPassword = existing ? await getProfilePassword(profile.id) : '';
     const previousHeaders = existing ? await getProfileHeaders(profile.id) : {};
-    // Cloud Link credentials are device secrets with no custom headers; a
-    // manual connection keeps its gateway headers alongside the password.
-    const headers = settings.connect ? {} : settings.headers;
-    await saveProfilePassword(profile.id, settings.password, Boolean(settings.connect));
-    await saveProfileHeaders(profile.id, headers);
+    await saveProfilePassword(profile.id, settings.password);
+    await saveProfileHeaders(profile.id, settings.headers);
     try { if (!existing) await save([...profiles, profile]); }
     catch (error) {
       if (existing) {
-        await saveProfilePassword(profile.id, previousPassword, Boolean(settings.connect)).catch(() => undefined);
+        await saveProfilePassword(profile.id, previousPassword).catch(() => undefined);
         await saveProfileHeaders(profile.id, previousHeaders).catch(() => undefined);
       } else {
         await deleteProfilePassword(profile.id).catch(() => undefined);
@@ -96,7 +93,7 @@ export function useWorkspaceConnections(shell: OpencodeProviderState, hydrated: 
       })) : [];
       if (!entries.length) {
         const placeholder = !initial.onboardingVersion && getConnectionUiScope(initial.settings) === getConnectionUiScope(defaultConnectionSettings);
-        const profile = placeholder ? { name: getServerHostname(initial.settings.serverUrl), modelPreferences: undefined } : await saveProfile(initial.settings);
+        const profile: ConnectionProfile = placeholder ? { id: '', name: getServerHostname(initial.settings.serverUrl), serverUrl: initial.settings.serverUrl, username: initial.settings.username, modelPreferences: undefined } : await saveProfile(initial.settings);
         entries.push({ id: getConnectionUiScope(initial.settings), name: profile.name, settings: initial.settings,
           enabled: initial.onboardingVersion > 0, preferences: { ...profile.modelPreferences, ...serverPreferences(initial.chatPreferences) },
           projects: [initial.activeProjectPath ?? ''], events: createSharedEventStream() });
@@ -259,7 +256,7 @@ export function useWorkspaceConnections(shell: OpencodeProviderState, hydrated: 
     check();
     selectWorkspace(target, next);
   }, [connectedWorkspace, pauseConversation, selectWorkspace]);
-  const switchConnection = useCallback(async (settings: Pick<OpencodeConnectionSettings, 'serverUrl' | 'username' | 'password' | 'headers' | 'connect'>, preferences?: Partial<ChatPreferences>, selectWorkspace = true) => {
+  const switchConnection = useCallback(async (settings: Pick<OpencodeConnectionSettings, 'serverUrl' | 'username' | 'password'>, preferences?: Partial<ChatPreferences>, selectWorkspace = true) => {
     const full = { ...settings, directory: '' };
     const profile = await saveProfile(full);
     const id = getConnectionUiScope(full);
@@ -287,11 +284,10 @@ export function useWorkspaceConnections(shell: OpencodeProviderState, hydrated: 
   const updateSettings = useCallback((id: string, value: OpencodeConnectionSettings, origin?: string) => {
     const previous = records.current.find((entry) => entry.id === id);
     if (!previous || JSON.stringify(previous.settings) === JSON.stringify(value)) return;
-    const manualChange = !value.connect;
-    if (manualChange) canPersist.current = true;
+    canPersist.current = true;
     for (const [key, runtime] of Object.entries(live.current)) if ((JSON.parse(key) as string[])[0] === id && key !== origin) runtime.suspend();
     const nextId = getConnectionUiScope(value);
-    change((current) => current.map((entry) => entry.id === id ? { ...entry, id: nextId, settings: value, events: createSharedEventStream(), ...(manualChange ? { enabled: false } : {}),
+    change((current) => current.map((entry) => entry.id === id ? { ...entry, id: nextId, settings: value, events: createSharedEventStream(), enabled: false,
       ...(nextId === id ? {} : { enabled: false, projects: [''], preferences: { autoApprove: false }, events: createSharedEventStream() }) } : entry));
     if (selected.current?.connectionId === id) { if (nextId !== id) select({ connectionId: nextId, projectPath: '' }); shellRef.current.setSettings(value); }
   }, [change, select]);

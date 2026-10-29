@@ -1,5 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+
+import { getWebSecret, setWebSecret } from '@/lib/secure-web-store';
 import { getConnectionScope, type ConnectionIdentity } from '@/lib/connection-scope';
 
 // Mirrors StoredAuth in HermesCore: everything needed to keep a signed-in
@@ -16,15 +18,13 @@ export type StoredAuth = {
   expiresAt?: number;
 };
 
-const webSecrets = new Map<string, string>();
-
 function authStorageKey(identity: ConnectionIdentity): string {
   return `hermes.auth.${getConnectionScope(identity)}`;
 }
 
 export async function loadStoredAuth(identity: ConnectionIdentity): Promise<StoredAuth | undefined> {
   const raw = Platform.OS === 'web'
-    ? webSecrets.get(authStorageKey(identity))
+    ? getWebSecret(authStorageKey(identity))
     : await SecureStore.getItemAsync(authStorageKey(identity));
   if (!raw) return undefined;
   try {
@@ -39,7 +39,7 @@ export async function loadStoredAuth(identity: ConnectionIdentity): Promise<Stor
 export async function saveStoredAuth(auth: StoredAuth, identity: ConnectionIdentity): Promise<void> {
   const raw = JSON.stringify(auth);
   if (Platform.OS === 'web') {
-    if (auth.accessToken) webSecrets.set(authStorageKey(identity), raw); else webSecrets.delete(authStorageKey(identity));
+    setWebSecret(authStorageKey(identity), auth.accessToken ? raw : '');
     return;
   }
   await SecureStore.setItemAsync(authStorageKey(identity), raw, { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY });
@@ -47,7 +47,7 @@ export async function saveStoredAuth(auth: StoredAuth, identity: ConnectionIdent
 
 export async function clearStoredAuth(identity: ConnectionIdentity): Promise<void> {
   if (Platform.OS === 'web') {
-    webSecrets.delete(authStorageKey(identity));
+    setWebSecret(authStorageKey(identity), '');
     return;
   }
   await SecureStore.deleteItemAsync(authStorageKey(identity));

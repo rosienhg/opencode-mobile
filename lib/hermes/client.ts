@@ -3,7 +3,7 @@ import { HermesError } from '@/lib/hermes/errors';
 import { HermesHttpClient, type HermesAuthState } from '@/lib/hermes/http';
 import { createHermesApi, type HermesApi } from '@/lib/hermes/api';
 import { clearStoredAuth, loadStoredAuth, saveStoredAuth, type StoredAuth } from '@/lib/hermes/tokens';
-import type { ConnectionIdentity } from '@/lib/connection-scope';
+import { getConnectionScope, type ConnectionIdentity } from '@/lib/connection-scope';
 
 export type HermesClient = {
   identity: ConnectionIdentity;
@@ -14,14 +14,27 @@ export type HermesClient = {
   loadStoredAuth: () => Promise<StoredAuth | undefined>;
   applyStoredAuth: (auth: StoredAuth) => void;
   signOut: () => Promise<void>;
+  /** Fires when the token set changes or the session is signed out. */
+  onAuthChanged: (listener: () => void) => () => void;
 };
 
-// One Hermes client per connection identity. Token persistence is keyed by the
-// connection scope, so the same server with a different user is a different
-// session.
-export function buildHermesClient(identity: ConnectionIdentity, hooks: { onSignedOut?: () => void } = {}): HermesClient {
+type HermesClientInternal = HermesClient & {
+  notifyAuthChanged: () => void;
+};
+
+// One Hermes client per connection identity, shared by every consumer (provider
+// runtime, notification monitor, widgets). A single instance keeps the refresh
+// single-flight across all of them; per-runtime state listens via onAuthChanged.
+const clients = new Map<string, HermesClientInternal>();
+
+export function getHermesClient(identity: ConnectionIdentity): HermesClient {
+  const scope = getConnectionScope(identity);
+  const existing = clients.get(scope);
+  if (existing) return existing;
+
   const baseUrl = hermesBaseUrl(identity.serverUrl);
   let auth: HermesAuthState | undefined;
+  const listeners = new Set<() => void>();
 
   const http = new HermesHttpClient({
     baseUrl,
@@ -29,15 +42,17 @@ export function buildHermesClient(identity: ConnectionIdentity, hooks: { onSigne
     onTokenRefreshed: (next) => {
       auth = next;
       void saveStoredAuth(toStoredAuth(next, identity, baseUrl), identity).catch(() => undefined);
+      notify();
     },
     onSignedOut: () => {
       auth = undefined;
       void clearStoredAuth(identity).catch(() => undefined);
-      hooks.onSignedOut?.();
+      notify();
     },
   });
+  const notify = () => { for (const listener of listeners) { try { listener(); } catch { /* listener errors are their own */ } } };
 
-  return {
+  const client: HermesClientInternal = {
     identity,
     http,
     api: createHermesApi(http),
@@ -50,12 +65,26 @@ export function buildHermesClient(identity: ConnectionIdentity, hooks: { onSigne
         provider: stored.provider,
         expiresAt: stored.expiresAt,
       };
+      notify();
     },
     signOut: async () => {
       auth = undefined;
       await clearStoredAuth(identity).catch(() => undefined);
+      notify();
     },
+    onAuthChanged: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    notifyAuthChanged: notify,
   };
+  clients.set(scope, client);
+  return client;
+}
+
+// Test hook: drop every pooled client so suites start from a clean auth state.
+export function resetHermesClients(): void {
+  clients.clear();
 }
 
 function toStoredAuth(state: HermesAuthState, identity: ConnectionIdentity, baseUrl: string): StoredAuth {

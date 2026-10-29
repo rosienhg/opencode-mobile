@@ -28,7 +28,7 @@ export type WorkspaceCatalog = {
   removeSession: (sessionId: string) => void;
 };
 export type SharedWorkspaceState = Pick<OpencodeProviderState,
-  'controlPlaneUrl' | 'setControlPlaneUrl' | 'onboardingVersion' | 'setOnboardingVersion' |
+  'onboardingVersion' | 'setOnboardingVersion' |
   'onboardingActive' | 'setOnboardingActive' | 'lastSessionByConnection' | 'setLastSessionByConnection' |
   'favoriteSessions' | 'setFavoriteSessions' | 'projectPathsByConnection' | 'setProjectPathsByConnection' | 'projectPathsByConnectionRef'>;
 export type WorkspaceRuntimeInput = {
@@ -41,9 +41,7 @@ export type WorkspaceRuntimeInput = {
   network: NetworkStatus;
   catalog?: WorkspaceCatalog;
   onCatalog: (connectionId: string, catalog: WorkspaceCatalog) => void;
-  connectSetup: ConnectionContextValue['connectSetup'];
   connectionProfiles: ConnectionContextValue['connectionProfiles'];
-  servicesValue: ConnectionContextValue['services'];
   isHydrated: boolean;
   visible: boolean;
   isConnectionOwner: boolean;

@@ -3,11 +3,10 @@ import type { LegacyClient } from '../compat/v1/client';
 import type { V2Context } from '../v2/shared';
 import Constants from 'expo-constants';
 
-import type { ConnectMetadata } from '@/lib/connect';
 import type { ProviderAuthValues } from '@/lib/opencode/types';
 import type { PromptInboxApi } from '@/lib/opencode/prompt-inbox';
 
-export type ServerContract = 'v1' | 'v2';
+export type ServerContract = 'v1' | 'v2' | 'hermes';
 
 export type PendingPermissionRequest = { id: string; sessionID: string; permission: string; patterns: string[]; always: string[]; metadata: Record<string, unknown>; tool?: { messageID: string; callID: string } };
 
@@ -73,7 +72,6 @@ export type OpencodeConnectionSettings = {
   // Per-connection custom request headers (gateway/service-token credentials).
   // Runtime only: persistence stores them in SecureStore, never AsyncStorage.
   headers?: Record<string, string>;
-  connect?: ConnectMetadata;
 };
 
 // In the web E2E build the Playwright fixture sets this before app scripts run.
@@ -132,10 +130,16 @@ export type ProviderOAuthApi = {
 
 export type NativeOpencodeApi = Pick<OpenCodeClient, 'server' | 'location' | 'project' | 'session' | 'message' | 'config' | 'provider' | 'model' | 'agent' | 'integration' | 'credential' | 'permission' | 'form' | 'event' | 'file' | 'vcs' | 'worktree' | 'mcp' | 'pty' | 'command' | 'skill' | 'reference' | 'plugin' | 'shell' | 'generate'>;
 
+// Hermes connections carry the shared HermesClient (auth + API + run streams)
+// instead of an OpenCode SDK surface. Everything the contracts layer needs is
+// reached through this handle.
+export type HermesClientHandle = import('../../hermes/client').HermesClient;
+
 export type ScopedOpencodeClient = {
   api?: NativeOpencodeApi;
   context?: V2Context;
   compatibility?: LegacyClient;
+  hermes?: HermesClientHandle;
   __opencode: ClientMetadata;
   mcpOAuth?: ProviderOAuthApi & { methods: (name: string) => Promise<import('../types').ProviderAuthMethod[]> };
   accounts?: ProviderAccountsApi;

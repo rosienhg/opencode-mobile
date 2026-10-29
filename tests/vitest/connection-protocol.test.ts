@@ -4,7 +4,6 @@ import { isContractMismatchError } from '@/lib/opencode/client/errors';
 import { fetchConnection } from '@/lib/opencode/client/fetch';
 import { detectServerContract, probeConnection } from '@/lib/opencode/client/probe';
 import { getServerHostname } from '@/lib/opencode/client/url';
-import { parseLocalPairing, resolveLocalPairing } from '@/lib/opencode/pairing';
 import * as readDeadline from '@/lib/opencode/client/read-deadline';
 import { loadTs } from '../helpers/runtime.mjs';
 
@@ -21,6 +20,11 @@ beforeEach(() => { fetchMock.mockReset(); });
 afterEach(() => { vi.useRealTimers(); });
 
 describe('connection setup probe', () => {
+  it('detects a Hermes dashboard from its public auth provider list', async () => {
+    fetchMock.mockImplementation(async (url) => String(url).endsWith('/api/auth/providers') ? json({ providers: [{ name: 'basic', supports_password: true }] }) : json({}, 404));
+    expect(await probeConnection(settings)).toEqual({ status: 'detected', contract: 'hermes' });
+    expect(await detectServerContract(settings)).toEqual({ contract: 'hermes' });
+  });
   it('keeps V1 authoritative when compatibility routes look like V2', async () => {
     fetchMock.mockImplementation(async (url) => String(url).endsWith('/global/health') ? json({ version: '1.18.3' }) : json({ version: '2.0.16', pid: 1 }));
     expect(await probeConnection(settings)).toEqual({ status: 'detected', contract: 'v1', version: '1.18.3' });
@@ -55,98 +59,6 @@ describe('connection setup probe', () => {
   });
 });
 
-describe('local pairing', () => {
-  it('preserves Cloudflare startup errors before SDK parsing, while auth denials and manual transport stay actionable', async () => {
-    const transport = await loadTs('lib/opencode/client/fetch.ts', {
-      './read-deadline': readDeadline, '@scure/base': { base64 }, 'expo/fetch': { fetch: async () => response },
-      '../data-usage': { recordBytes: () => {}, recordRequest: () => {} },
-      '../request-stats': { recordRequestStart: () => () => {} },
-      './request-policy': { getRequestTimeout: () => 30_000, shouldRetryRead: () => false },
-      '@/lib/connect': { getConnectCredentialError: () => undefined }, './url': {},
-    }, { fetch: async () => response });
-    const html = (status: number) => new Response('<html>Cloudflare Error 1033</html>', { status, headers: { 'content-type': 'text/html' } });
-    let response = html(530);
-    const cloudSettings = { ...settings, connect: {} };
-    await expect(transport.fetchConnection('https://machine.test', {}, cloudSettings)).rejects.toThrow('1033');
-    for (const status of [401, 403]) {
-      response = html(status);
-      await expect(transport.fetchConnection('https://machine.test', {}, cloudSettings)).rejects.toThrow(status === 401 ? 'credentials were rejected' : 'access was denied');
-    }
-    response = html(530);
-    expect(await (await transport.fetchConnection('http://manual.test')).text()).toContain('1033');
-  });
-  it('uses redirect-aware native transport for redemption while preserving normal manual transport', async () => {
-    const manualFetch = vi.fn(async () => json({}));
-    const nativeFetch = vi.fn(async () => json({}));
-    const transport = await loadTs('lib/opencode/client/fetch.ts', {
-      './read-deadline': readDeadline, '@scure/base': { base64 }, 'expo/fetch': { fetch: nativeFetch },
-      '../data-usage': { recordBytes: () => {}, recordRequest: () => {} },
-      '../request-stats': { recordRequestStart: () => () => {} },
-      './request-policy': { getRequestTimeout: () => 30_000, shouldRetryRead: () => false },
-      '@/lib/connect': { getConnectCredentialError: () => undefined }, './url': {},
-    }, { fetch: manualFetch });
-    await transport.fetchConnection('http://example.test/api/info');
-    await transport.fetchConnection('http://example.test/auth/connect/code', { redirect: 'error' });
-    expect(manualFetch).toHaveBeenCalledOnce();
-    expect(nativeFetch).toHaveBeenCalledWith('http://example.test/auth/connect/code', expect.objectContaining({ redirect: 'error', signal: expect.any(AbortSignal) }));
-  });
-  it.each([
-    JSON.stringify({ urls: ['http://192.168.1.10:49374'], code: 'one-use-code' }),
-    'http://192.168.1.10:49374/auth/connect/one-use-code',
-  ])('parses current codes and links without retaining the code in a server URL', (code) => {
-    expect(parseLocalPairing(code)).toEqual({ urls: ['http://192.168.1.10:49374'], code: 'one-use-code' });
-  });
-  it.each(['#', '?data='])('parses encoded legacy credential links using %s', (separator) => {
-    const code = `http://192.168.1.10:49374/connect${separator}${Buffer.from(JSON.stringify({ username: 'opencode', password: 'secret' })).toString('base64')}`;
-    expect(parseLocalPairing(code)).toEqual({ urls: ['http://192.168.1.10:49374'], password: 'secret' });
-  });
-  it('accepts legacy credential JSON and de-duplicates addresses', () => {
-    expect(parseLocalPairing(JSON.stringify({ username: 'opencode', password: 'secret', urls: ['http://example.test/', 'http://example.test'] }))).toEqual({ urls: ['http://example.test'], password: 'secret' });
-  });
-  it('preserves UTF-8 passwords in legacy links', () => {
-    const secret = { username: 'opencode', password: 'contraseña 🔑' };
-    expect(parseLocalPairing(`http://example.test/connect#${Buffer.from(JSON.stringify(secret)).toString('base64')}`)).toEqual({ urls: ['http://example.test'], password: secret.password });
-  });
-  it('preserves proxy prefixes while removing legacy credential data', () => {
-    const encoded = Buffer.from(JSON.stringify({ username: 'opencode', password: 'secret' })).toString('base64url');
-    expect(parseLocalPairing(`https://example.test/proxy/connect#${encoded}`)).toEqual({ urls: ['https://example.test/proxy'], password: 'secret' });
-    expect(parseLocalPairing('https://example.test/proxy/auth/connect/code')).toEqual({ urls: ['https://example.test/proxy'], code: 'code' });
-  });
-  it.each(['{}', '{', 'https://example.test', 'https://example.test/auth/connect/x?secret=y', JSON.stringify({ code: 'x', urls: ['file:///tmp'] }), JSON.stringify({ code: 'x', urls: ['http://user:secret@example.test'] }), JSON.stringify({ code: '../x', urls: ['http://example.test'] }), JSON.stringify({ username: 'alice', password: 'secret', urls: ['http://example.test'] }), 'x'.repeat(17000)])('rejects invalid payloads before requests', async (code) => {
-    await expect(resolveLocalPairing(code)).rejects.toMatchObject({ reason: 'invalid' });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-  it('skips loopback and tries distinct addresses in order with JSON redemption', async () => {
-    fetchMock.mockImplementation(async (url) => { if (String(url).includes('unreachable')) throw new Error('Network'); return json({ token: 'session-token' }); });
-    const result = await resolveLocalPairing(JSON.stringify({ code: 'one-use-code', urls: ['http://127.0.0.1', 'http://unreachable.test', 'http://example.test', 'http://example.test'] }));
-    expect(result).toEqual({ ...settings, password: 'session-token' });
-    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['http://unreachable.test/auth/connect/one-use-code', 'http://example.test/auth/connect/one-use-code']);
-    expect(fetchMock.mock.calls[1][1]).toMatchObject({ headers: { Accept: 'application/json' }, redirect: 'error' });
-  });
-  it('bounds each address attempt to five seconds', async () => {
-    vi.useFakeTimers();
-    fetchMock.mockImplementation((_url, options) => new Promise((_resolve, reject) => options?.signal?.addEventListener('abort', () => reject(new Error('Timeout')))));
-    const pending = expect(resolveLocalPairing(JSON.stringify({ code: 'x', urls: ['http://example.test'] }))).rejects.toMatchObject({ reason: 'unreachable' });
-    await vi.advanceTimersByTimeAsync(5000);
-    await pending;
-  });
-  it('distinguishes expired, unreachable and loopback-only codes', async () => {
-    fetchMock.mockResolvedValue(json({}, 401));
-    const payload = (urls: string[]) => JSON.stringify({ code: 'x', urls });
-    await expect(resolveLocalPairing(payload(['http://example.test']))).rejects.toMatchObject({ reason: 'expired' });
-    fetchMock.mockRejectedValue(new Error('Network'));
-    await expect(resolveLocalPairing(payload(['http://example.test']))).rejects.toMatchObject({ reason: 'unreachable' });
-    fetchMock.mockClear();
-    await expect(resolveLocalPairing(payload(['http://localhost.', 'http://127.0.0.2', 'http://[::1]', 'http://[::ffff:127.0.0.1]']))).rejects.toMatchObject({ reason: 'loopback' });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-  it('verifies legacy credentials before choosing an address', async () => {
-    fetchMock.mockImplementation(async (url) => String(url).endsWith('/api/info') ? json({ version: '2.0.16', pid: 1 }) : json({}, 404));
-    expect(await resolveLocalPairing(JSON.stringify({ urls: ['http://example.test'], username: 'opencode', password: 'legacy-secret' }))).toMatchObject({ serverUrl: 'http://example.test', username: '', password: 'legacy-secret' });
-  });
-});
-
-
 describe('protocol fallback classification', () => {
   it('tries another contract only for a missing endpoint or malformed protocol', () => {
     for (const status of [404, 405]) expect(isContractMismatchError(Object.assign(new Error('request failed'), { status }))).toBe(true);
@@ -170,7 +82,8 @@ describe('native defaults', () => {
     const urls = await loadTs('lib/opencode/client/url.ts', { './types': { defaultConnectionSettings: settings } });
     const client = await loadTs('lib/opencode/client.ts', {
       './compat/v1/client': { buildV1Compatibility: legacy }, './v2-client': { buildV2Client: native },
-      './client/types': {}, './client/url': urls, './client/fetch': {}, './client/errors': {}, './client/probe': {}, './client/interactions': {}, './client/management': {}, './client/management-api': {},
+      '@/lib/hermes/client': { getHermesClient: () => ({}) },
+      './client/types': {}, './client/url': urls, './client/fetch': {}, './client/errors': {}, './client/probe': {}, './client/interactions': {},
     });
     const connection = { ...settings, directory: '/repo', serverUrl: 'https://test/proxy/api' };
     client.buildClient(connection); expect(native).toHaveBeenCalledOnce(); expect(legacy).not.toHaveBeenCalled();

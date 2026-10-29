@@ -1,7 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
-import { getConnectTestSecret, setConnectTestSecret } from '@/lib/connect';
 
+import { getWebSecret, setWebSecret } from '@/lib/secure-web-store';
 import type { OpencodeConnectionSettings } from '@/lib/opencode/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SETTINGS_STORAGE_KEY } from '@/lib/storage-keys';
@@ -20,7 +20,7 @@ export function withoutConnectionSecrets(settings: OpencodeConnectionSettings): 
 
 export async function getConnectionPassword() {
   if (Platform.OS === 'web') {
-    return getConnectTestSecret(CONNECTION_PASSWORD_STORAGE_KEY);
+    return getWebSecret(CONNECTION_PASSWORD_STORAGE_KEY);
   }
   const password = await SecureStore.getItemAsync(CONNECTION_PASSWORD_STORAGE_KEY);
   if (password) {
@@ -48,7 +48,7 @@ export async function getConnectionPassword() {
 
 export async function saveConnectionPassword(password: string, background = false) {
   if (Platform.OS === 'web') {
-    setConnectTestSecret(CONNECTION_PASSWORD_STORAGE_KEY, password);
+    setWebSecret(CONNECTION_PASSWORD_STORAGE_KEY, password);
     return;
   }
   if (password) {

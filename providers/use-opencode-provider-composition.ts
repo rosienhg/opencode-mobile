@@ -1,33 +1,23 @@
 import { emptySharedInput } from '@/providers/use-share-state';
-import type { OpencodeEvent } from '@/lib/opencode/events';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 
-import { buildClient, getRequestHeaders } from '@/lib/opencode/client';
-import { buildOpencodeProjects, resolveActiveProject } from '@/providers/opencode-provider-utils';
+import { buildClient } from '@/lib/opencode/client';
 import {
   CURRENT_ONBOARDING_VERSION,
   isOnboardingComplete,
 } from '@/providers/onboarding-state';
-import { useOpencodeRealtime } from '@/providers/use-opencode-realtime';
 import { useConversationState } from '@/providers/use-conversation-state';
 import { MAX_ACTIVE_SESSIONS, useActiveSessions } from '@/providers/use-active-sessions';
 import { getActiveSessions } from '@/providers/active-sessions';
-import { useActivityNotifications } from '@/providers/use-activity-notifications';
-import { usePermissionRulesState } from '@/providers/use-permission-rules-state';
 import { useTranscriptState } from '@/providers/use-transcript-state';
 import { useTranscriptReadErrors } from '@/providers/use-transcript-read-errors';
-import { useMcpState } from '@/providers/use-mcp-state';
-import { useExtensionsState } from '@/providers/use-extensions-state';
-import { useTerminalState } from '@/providers/use-terminal-state';
-import { useWorktreeState } from '@/providers/use-worktree-state';
-import { handleProviderEvent, type ProviderEventActions } from '@/providers/opencode-provider-events';
+import { useHermesRuns } from '@/providers/use-hermes-runs';
+import { useHermesPrompts } from '@/providers/use-hermes-prompts';
 import { useWorkspaceRuntimeState } from '@/providers/use-workspace-runtime-state';
 import { useOpencodeProviderEffects } from '@/providers/use-opencode-provider-effects';
 import { useProjectActions } from '@/providers/use-project-actions';
 import { useCapabilitiesActions } from '@/providers/use-capabilities-actions';
 import { useSessionActions } from '@/providers/use-session-actions';
-import { usePromptInbox } from '@/providers/use-prompt-inbox';
-import { usePromptLifecycle } from '@/providers/use-prompt-lifecycle';
 import { useConnectionActions } from '@/providers/use-connection-actions';
 import { useConnectionRetry } from '@/providers/use-connection-retry';
 import { useOpencodeProviderValues } from '@/providers/opencode-provider-values';
@@ -38,6 +28,75 @@ import type { WorkspaceCatalog, WorkspaceRuntimeInput } from '@/providers/worksp
 
 const EMPTY_CATALOG: WorkspaceCatalog = { sessions: [], statuses: {}, refresh: async () => undefined, removeSession: () => {} };
 const NOOP_REFRESH = async () => undefined;
+
+// Hermes connections have no OpenCode-only surfaces. The contexts stay part of
+// the app's contract (components reference them), so the composition supplies
+// inert values; the settings registry and tab layout hide their screens.
+const noop = () => undefined;
+const asyncNoop = async () => undefined;
+const terminalStub = {
+  terminals: [],
+  activeTerminalId: undefined,
+  terminalRuntime: { scope: 0, instances: [], registerRenderer: () => noop, resize: noop },
+  terminalConnection: 'idle' as const,
+  refreshTerminals: asyncNoop,
+  createTerminal: async () => { throw new Error('Hermes has no terminal surface.'); },
+  openTerminal: asyncNoop,
+  sendTerminalInput: noop,
+  closeTerminal: asyncNoop,
+};
+const worktreeStub = {
+  worktrees: { entries: [], loading: false },
+  refreshWorktrees: asyncNoop,
+  createWorktree: asyncNoop,
+  removeWorktree: asyncNoop,
+  resetWorktrees: noop,
+};
+const mcpStub = {
+  mcpStatuses: {},
+  refreshMcpServers: asyncNoop,
+  addMcpServer: asyncNoop,
+  connectMcpServer: asyncNoop,
+  disconnectMcpServer: asyncNoop,
+  mcpOAuth: { methods: async () => [], start: async () => { throw new Error('Hermes has no MCP surface.'); }, complete: asyncNoop, wait: asyncNoop, cancel: asyncNoop },
+  resetMcpState: noop,
+};
+const extensionsStub = {
+  extensions: {
+    snapshot: undefined,
+    isRefreshing: false,
+    refresh: asyncNoop,
+    addMcp: asyncNoop,
+    updateMcp: asyncNoop,
+    removeMcp: asyncNoop,
+    addPlugin: asyncNoop,
+    removePlugin: asyncNoop,
+    saveCommand: asyncNoop,
+    removeCommand: asyncNoop,
+    createSkill: asyncNoop,
+    updateSkill: asyncNoop,
+    removeSkill: asyncNoop,
+    restoreBackup: asyncNoop,
+  },
+};
+const permissionRulesStub = {
+  savedPermissions: [],
+  refreshSavedPermissions: asyncNoop,
+  removeSavedPermission: asyncNoop,
+  resetPermissionRules: noop,
+};
+const servicesStub = {
+  services: [] as never[],
+  available: false as const,
+  machines: [] as never[],
+  isRefreshing: false,
+  isSaving: false,
+  refresh: asyncNoop,
+  save: async () => { throw new Error('Hermes has no service management surface.'); },
+  remove: asyncNoop,
+  selectMachine: noop,
+  activateTarget: async () => false,
+};
 
 export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
   const state = useWorkspaceRuntimeState(input);
@@ -52,8 +111,6 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     initialConnectStartedRef,
     setOnboardingVersion,
     setOnboardingActive,
-    setSavedPermissions,
-    setMcpAuthPrompt,
     bootstrapPromiseRef,
     bootstrapTokenRef,
     sessionRefreshTimeoutsRef,
@@ -84,23 +141,17 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     setOnboardingActive(false);
   }, [setOnboardingActive]);
 
-  const dismissMcpAuth = useCallback(() => {
-    setMcpAuthPrompt(undefined);
-  }, [setMcpAuthPrompt]);
-
-  const projects = useMemo(
-    () => buildOpencodeProjects(state.projectPathsByConnection[state.connectionScope] ?? [], state.serverProjects),
-    [state.connectionScope, state.projectPathsByConnection, state.serverProjects],
-  );
+  // Hermes has no projects: the catalog is one synthetic workspace.
+  const projects = useMemo(() => [], []);
 
   const client = useMemo(
-    () => buildClient({ ...state.settings, directory: state.activeProjectPath || '' }, state.serverContract),
+    () => buildClient({ ...state.settings, directory: '' }, 'hermes'),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reconnect needs fresh clients so old in-flight requests stay invalid.
-    [state.activeProjectPath, state.serverContract, state.settings, input.connection.enabled],
+    [state.settings, input.connection.enabled],
   );
-  const catalogClient = useMemo(() => buildClient({ ...state.settings, directory: '' }, state.serverContract),
+  const catalogClient = useMemo(() => buildClient({ ...state.settings, directory: '' }, 'hermes'),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reconnect invalidates the previous catalog client too.
-    [state.serverContract, state.settings, input.connection.enabled]);
+    [state.settings, input.connection.enabled]);
   // Tag each client instance with the generation current when it is first seen.
   // A layout effect keeps this off the render path while still running before
   // any callback that could consume `isCurrentClient`.
@@ -127,52 +178,15 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     isCurrentClient,
     refreshMessages: transcript.refreshMessages,
   });
-  const inbox = usePromptInbox({
-    client,
-    isCurrentClient,
-    refreshMessages: transcriptRead.readMessages,
-    connected: state.connection.status === 'connected',
-    online: network.online,
-  });
-  const refreshInboxMessages = inbox.refreshMessages;
   const retryTranscript = useCallback(async () => {
     const sessionId = state.currentSessionId;
     if (!sessionId) return;
-    await refreshInboxMessages(sessionId, false).catch(() => undefined);
-  }, [refreshInboxMessages, state.currentSessionId]);
-  // Memoized so the terminal reconnect effect only runs when headers actually
-  // change, not on every render (getRequestHeaders returns a new object).
-  const terminalHeaders = useMemo(() => getRequestHeaders(state.settings), [state.settings]);
-  const terminal = useTerminalState({
-    enabled: input.connection.enabled,
-    ...state,
-    client,
-    directory: state.activeProjectPath || '',
-    isCurrentClient,
-    serverUrl: state.settings.serverUrl,
-    headers: terminalHeaders,
-    online: network.online,
-  });
-  const worktree = useWorktreeState({ ...state, client, isCurrentClient, refreshProjectCatalog: refreshProjectCatalogLatest });
-  const activeProject = useMemo(
-    () => resolveActiveProject(projects, state.activeProjectPath, worktree.worktrees) ?? (state.activeProjectPath
-      ? { path: state.activeProjectPath, label: state.activeProjectPath.split('/').filter(Boolean).pop() || state.activeProjectPath } : undefined),
-    [projects, state.activeProjectPath, worktree.worktrees],
-  );
-  const mcp = useMcpState({ ...state, client, isCurrentClient, refreshChatCapabilities: refreshChatCapabilitiesLatest });
-  const permissionRules = usePermissionRulesState({ client, isCurrentClient, setSavedPermissions });
+    await transcriptRead.readMessages(sessionId, false).catch(() => undefined);
+  }, [transcriptRead.readMessages, state.currentSessionId]);
 
-  // Clear the MCP auth alert once the named server reports connected. Doing this
-  // here keeps `mcpStatuses` out of the approvals value's dependencies, so
-  // approval consumers do not re-render on MCP status changes.
-  useEffect(() => {
-    if (state.mcpAuthPrompt && mcp.mcpStatuses[state.mcpAuthPrompt.mcpName]?.status === 'connected') {
-      setMcpAuthPrompt(undefined);
-    }
-  }, [mcp.mcpStatuses, setMcpAuthPrompt, state.mcpAuthPrompt]);
-  // One runtime per connection owns the cross-project catalog snapshot. Other
+  // The catalog owner is the only runtime that seeds the shared snapshot. Other
   // retained projects consume it so reconnecting N projects does not issue N
-  // identical listActiveSessions reads.
+  // identical session list reads.
   const ownedActiveSessions = useActiveSessions({
     catalogClient,
     isCurrentCatalogClient,
@@ -200,25 +214,19 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     maxTotal: MAX_ACTIVE_SESSIONS,
   }), [catalog.sessions, catalog.statuses, state.currentSessionId, state.chatPreferences.hideSubagentChats]);
 
-  const streamConnectedRef = useRef(false);
-  const { resetMcpState } = mcp;
-  const { resetPermissionRules } = permissionRules;
-  const { resetTerminal } = terminal;
   const { reset: resetTranscript } = transcript;
-  const { resetWorktrees } = worktree;
   const clearProjectState = useOpencodeProviderReset({
     state,
-    resetMcpState,
-    resetPermissionRules,
-    resetTerminal,
+    resetMcpState: noop,
+    resetPermissionRules: noop,
+    resetTerminal: noop,
     resetTranscript,
-    resetWorktrees,
+    resetWorktrees: noop,
   });
 
   const softResetProjectState = useCallback(() => {
-    // Same-machine credential rotation: keep server-derived data (still valid
-    // for the same server) but drop in-flight bookkeeping bound to the old
-    // client so a new bootstrap can start.
+    // Same-server token rotation: keep server-derived data but drop in-flight
+    // bookkeeping bound to the old client so a new bootstrap can start.
     bootstrapPromiseRef.current = null;
     bootstrapTokenRef.current = undefined;
     Object.values(sessionRefreshTimeoutsRef.current).forEach((timeout) => clearTimeout(timeout));
@@ -226,52 +234,72 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     sessionRefreshOptionsRef.current = {};
   }, [bootstrapPromiseRef, bootstrapTokenRef, sessionRefreshOptionsRef, sessionRefreshTimeoutsRef]);
 
-  const project = useProjectActions({ ...state, client, catalogClient, isCurrentClient, isCurrentCatalogClient, clearProjectState, isHydrated, refreshMessages: inbox.refreshMessages });
+  const project = useProjectActions({ ...state, client, catalogClient, isCurrentClient, isCurrentCatalogClient, clearProjectState, isHydrated, refreshMessages: transcriptRead.readMessages });
 
   const capabilities = useCapabilitiesActions({ ...state, client, isCurrentClient });
-  // Event bursts (rename + update, config fan-out, file-save VCS events) share
-  // one refresh instead of starting overlapping reads.
+  // Event bursts (rename + update) share one refresh instead of starting
+  // overlapping reads.
   const scheduleSessionsRefresh = useCoalescedRefresh(() => project.refreshSessions(), 150);
   const scheduleChatCapabilitiesRefresh = useCoalescedRefresh(capabilities.refreshChatCapabilities, 250);
   const scheduleServerFeaturesRefresh = useCoalescedRefresh(project.refreshServerFeatures, 250);
   const scheduleProjectCatalogRefresh = useCoalescedRefresh(() => project.refreshProjectCatalog(true), 250);
-  const extensions = useExtensionsState({
-    client,
-    isCurrentClient,
-    refreshChatCapabilities: capabilities.refreshChatCapabilities,
-    refreshServerFeatures: project.refreshServerFeatures,
-    refreshMcpServers: mcp.refreshMcpServers,
-  });
 
   const sessionActions = useSessionActions({
     ...state,
     ...project,
-    ...permissionRules,
+    ...permissionRulesStub,
     client,
     catalogClient,
     isCurrentClient,
     isCurrentCatalogClient,
-    refreshMessages: inbox.refreshMessages,
+    refreshMessages: transcriptRead.readMessages,
     refreshActiveSessions: catalog.refresh,
     refreshChatCapabilities: capabilities.refreshChatCapabilities,
     beginHydration: transcript.beginHydration,
   });
   const ensureActiveSessionRef = useRef(sessionActions.ensureActiveSession);
 
-  const prompt = usePromptLifecycle({
-    submitPrompt: inbox.submitPrompt,
-    ...state,
-    ...project,
+  // Hermes runs: the SSE attach loop, approvals, clarify, and live records.
+  const sendNextQueuedRef = useRef<(sessionId: string) => Promise<void>>(async () => undefined);
+  const runs = useHermesRuns({
     client,
     isCurrentClient,
-    refreshMessages: inbox.refreshMessages,
+    connected: state.connection.status === 'connected',
+    online: network.online,
+    currentSessionId: state.currentSessionId,
+    refreshMessages: transcriptRead.readMessages,
+    refreshSessions: project.refreshSessions,
+    setSessionStatuses: state.setSessionStatuses,
+    setPendingPermissionsBySession: state.setPendingPermissionsBySession,
+    setPendingQuestionsBySession: state.setPendingQuestionsBySession,
+    onAuthFailure: () => connectionActionsRef.current?.handleStreamAuthFailure('auth'),
+    onRunEnded: (sessionId) => { void sendNextQueuedRef.current(sessionId); },
+  });
+
+  const prompts = useHermesPrompts({
+    client,
+    isCurrentClient,
+    connected: state.connection.status === 'connected',
+    online: network.online,
+    connectionScope: state.connectionScope,
+    chatPreferences: state.chatPreferences,
+    availableModels: state.availableModels,
+    skillCommandNames: state.commands.map((command) => command.name.toLowerCase()),
+    runs,
+    busyNotificationsRef: state.busyNotificationsRef,
+    promptSubmissionRef: state.promptSubmissionRef,
+    refreshMessages: transcriptRead.readMessages,
+  });
+  useLayoutEffect(() => {
+    sendNextQueuedRef.current = prompts.sendNextQueued;
+    ensureActiveSessionRef.current = sessionActions.ensureActiveSession;
   });
 
   const connectionActions = useConnectionActions({
     ...state,
     ...project,
     ...sessionActions,
-    ...prompt,
+    ...prompts,
     isCurrentCatalogClient,
     ensureActiveSessionRef,
     clearProjectState,
@@ -279,11 +307,10 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     isHydrated,
     refreshActiveSessions: catalog.refresh,
   }, input);
+  const connectionActionsRef = useRef<typeof connectionActions | null>(null);
+  useLayoutEffect(() => { connectionActionsRef.current = connectionActions; });
   const reconnect = useConnectionRetry({
     active: input.visible,
-    // Cloud Link activation owns its own startup budget and delayed retry.
-    // A generic reconnect here would add attempts the user never requested.
-    paused: Boolean(state.settings.connect),
     status: state.connection.status,
     kind: 'kind' in state.connection ? state.connection.kind : undefined,
     online: network.online,
@@ -299,93 +326,15 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     messagesBySession: state.messagesBySession,
     pendingPermissionsBySession: state.pendingPermissionsBySession,
     pendingQuestionsBySession: state.pendingQuestionsBySession,
-    sendingState: prompt.sendingState,
+    sendingState: prompts.sendingState,
     ensureActiveSession: sessionActions.ensureActiveSession,
-    sendPrompt: prompt.sendPrompt,
+    sendPrompt: prompts.sendPrompt,
   });
   const { phase: conversationPhase, sessionId: conversationSessionId } = conversation;
 
-  const eventActionsRef = useRef<ProviderEventActions | null>(null);
-
-  // Latest-ref bridges for callbacks defined before the actions they forward to.
-  // Written in a layout effect so no ref is touched during render; all readers
-  // are event handlers, realtime callbacks, or passive effects that run later.
+  const streamConnectedRef = useRef(false);
   useLayoutEffect(() => {
-    refreshProjectCatalogRef.current = project.refreshProjectCatalog;
-    refreshChatCapabilitiesRef.current = capabilities.refreshChatCapabilities;
-    ensureActiveSessionRef.current = sessionActions.ensureActiveSession;
-    const focusSessionIds = new Set<string>();
-    if (state.currentSessionId) focusSessionIds.add(state.currentSessionId);
-    if (conversationSessionId) focusSessionIds.add(conversationSessionId);
-    for (const [sessionId, prompts] of Object.entries(inbox.pendingPromptsBySession)) {
-      if (prompts.length > 0) focusSessionIds.add(sessionId);
-    }
-    eventActionsRef.current = {
-      refreshSessions: project.refreshSessions,
-      scheduleSessionRefresh: project.scheduleSessionRefresh,
-      scheduleSessionsRefresh,
-      scheduleServerFeaturesRefresh,
-      scheduleChatCapabilitiesRefresh,
-      scheduleProjectCatalogRefresh,
-      refreshPendingInteractions: project.refreshPendingInteractions,
-      refreshServerFeatures: project.refreshServerFeatures,
-      refreshChatCapabilities: capabilities.refreshChatCapabilities,
-      refreshProjectCatalog: project.refreshProjectCatalog,
-      refreshTerminals: terminal.refreshTerminals,
-      refreshWorktrees: worktree.refreshWorktrees,
-      refreshMcpServers: mcp.refreshMcpServers,
-      refreshDiagnostics: project.refreshDiagnostics,
-      focusSessionIds,
-      setSessions: state.setSessions,
-      removeCatalogSession: catalog.removeSession,
-      setSessionStatuses: state.setSessionStatuses,
-      explicitSessionSelectionRef: state.explicitSessionSelectionRef,
-      setPromptError: prompt.setPromptError,
-      setDiffsBySession: state.setDiffsBySession,
-      setTodosBySession: state.setTodosBySession,
-      setPendingPermissionsBySession: state.setPendingPermissionsBySession,
-      setPendingQuestionsBySession: state.setPendingQuestionsBySession,
-      setMcpAuthPrompt: state.setMcpAuthPrompt,
-      selectedDiffMessageBySessionRef: state.selectedDiffMessageBySessionRef,
-    };
-  });
-  const handleEvent = useCallback((event: OpencodeEvent) => {
-    if (eventActionsRef.current) {
-      handleProviderEvent(event, eventActionsRef.current);
-    }
-  }, []);
-
-  const handleActivityEvent = useActivityNotifications({
-    catalogClient, settings: state.settings, contract: state.serverContract,
-    connectionScope: state.connectionScope, connected: input.isConnectionOwner && state.connection.status === 'connected',
-    currentSessionId: input.visible ? state.currentSessionId : undefined, sessions: state.sessions, sendingState: prompt.sendingState, promptError: prompt.promptError,
-    streamConnectedRef,
-  });
-
-  const { eventStreamStatus } = useOpencodeRealtime({
-    catalogClient,
-    subscribe: input.connection.events,
-    activeProjectPath: state.activeProjectPath,
-    connected: state.connection.status === 'connected',
-    online: network.online,
-    constrained: network.constrained,
-    pendingSessionIds: Object.keys(inbox.pendingPromptsBySession).filter((id) => inbox.pendingPromptsBySession[id].length > 0),
-    busy: Object.values(inbox.pendingPromptsBySession).some((prompts) => prompts.length > 0) || prompt.sendingState.active || conversationPhase !== 'off' || Object.values(state.sessionStatuses).some((status) => status.type !== 'idle'),
-    currentSessionId: state.currentSessionId,
-    conversationSessionId,
-    onEvent: handleEvent,
-    onGlobalEvent: handleActivityEvent,
-    onFatalError: connectionActions.handleStreamAuthFailure,
-    refreshSessions: project.refreshSessions,
-    refreshSessionStatuses: project.refreshSessionStatuses,
-    refreshPendingInteractions: project.refreshPendingInteractions,
-    refreshMessages: inbox.refreshMessages,
-    refreshSessionDiff: project.refreshSessionDiff,
-    refreshSessionTodos: project.refreshSessionTodos,
-  });
-
-  useLayoutEffect(() => {
-    streamConnectedRef.current = eventStreamStatus === 'connected';
+    streamConnectedRef.current = runs.eventStreamStatus === 'connected';
   });
 
   useOpencodeProviderEffects({
@@ -399,31 +348,47 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     connect: connectionActions.connect,
     // The catalog owner is the only runtime that seeds the shared snapshot.
     refreshActiveSessions: isConnectionOwner ? catalog.refresh : NOOP_REFRESH,
-    refreshWorktrees: worktree.refreshWorktrees,
+    refreshWorktrees: NOOP_REFRESH,
     ensureActiveSessionRef,
-    setPromptError: prompt.setPromptError,
+    setPromptError: prompts.setPromptError,
     conversationSessionId,
     pruneTranscript: transcript.prune,
   });
+
+  // Hermes answer paths override the OpenCode interaction actions: approvals
+  // ride the run stream, clarify answers go to the plugin.
+  const hermesInteractions = useMemo(() => ({
+    replyToPermission: async (requestId: string, reply: 'once' | 'always' | 'reject') => {
+      const sessionId = Object.entries(state.pendingPermissionsBySession)
+        .find(([, list]) => list.some((entry) => entry.id === requestId))?.[0];
+      if (!sessionId) throw new Error('This approval is no longer available.');
+      await runs.answerApproval(sessionId, requestId, reply);
+    },
+    replyToQuestion: async (requestId: string, answers: (string[] | undefined)[]) => {
+      await runs.answerClarify(requestId, answers);
+    },
+    rejectQuestion: async (requestId: string) => {
+      await runs.skipClarify(requestId);
+    },
+  }), [runs, state.pendingPermissionsBySession]);
 
   const values = useOpencodeProviderValues({
     ...state,
     ...transcript,
     transcriptReadError: state.currentSessionId ? transcriptRead.errors[state.currentSessionId] : undefined,
     retryTranscript,
-    ...permissionRules,
-    mcpAuthPrompt: state.mcpAuthPrompt,
-    dismissMcpAuth,
-    pendingPromptsBySession: inbox.pendingPromptsBySession,
-    cancelPrompt: inbox.cancelPrompt,
-    ...terminal,
-    ...worktree,
-    ...mcp,
-    ...extensions,
+    ...permissionRulesStub,
+    mcpAuthPrompt: undefined,
+    dismissMcpAuth: noop,
+    ...terminalStub,
+    ...worktreeStub,
+    ...mcpStub,
+    ...extensionsStub,
     ...project,
     ...sessionActions,
+    ...hermesInteractions,
     ...capabilities,
-    ...prompt,
+    ...prompts,
     ...connectionActions,
     activeSessions,
     refreshActiveSessions: catalog.refresh,
@@ -437,32 +402,36 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     startOnboardingReview,
     stopOnboardingReview,
     projects,
-    activeProject,
-    eventStreamStatus,
+    activeProject: undefined,
+    eventStreamStatus: runs.eventStreamStatus,
     network,
     reconnect,
     sharedInput: emptySharedInput,
+    servicesValue: servicesStub,
   });
 
   const suspend = useCallback(() => {
     scopeGenerationRef.current++; serverGenerationRef.current++; initialConnectStartedRef.current = false;
     for (const timeout of Object.values(sessionRefreshTimeoutsRef.current)) clearTimeout(timeout);
     sessionRefreshTimeoutsRef.current = {}; sessionRefreshOptionsRef.current = {};
+    runs.reset();
     setConnection({ status: 'idle', message: 'Disconnected' });
-  }, [scopeGenerationRef, serverGenerationRef, setConnection, sessionRefreshTimeoutsRef, sessionRefreshOptionsRef, initialConnectStartedRef]);
-  const busy = prompt.sendingState.active || conversationPhase !== 'off' || state.isBootstrappingChat ||
-    state.connection.status === 'connecting' || Boolean(state.mcpAuthPrompt) ||
+  }, [scopeGenerationRef, serverGenerationRef, setConnection, sessionRefreshTimeoutsRef, sessionRefreshOptionsRef, initialConnectStartedRef, runs]);
+  const busy = prompts.sendingState.active || conversationPhase !== 'off' || state.isBootstrappingChat ||
+    state.connection.status === 'connecting' ||
     Object.values(state.sessionStatuses).some((status) => status.type !== 'idle') ||
     Object.values(state.pendingPermissionsBySession).some((items) => items.length > 0) ||
     Object.values(state.pendingQuestionsBySession).some((items) => items.length > 0) ||
-    Object.values(inbox.pendingPromptsBySession).some((items) => items.length > 0) || terminal.terminalRuntime.instances.length > 0;
+    Object.values(runs.promptQueueBySession).some((items) => items.length > 0);
   return useMemo(() => ({ enabled: input.connection.enabled, values, busy, suspend, catalogClient, catalogSessions: catalog.sessions, catalogStatuses: catalog.statuses,
     pendingPermissions: state.pendingPermissionsBySession, pendingQuestions: state.pendingQuestionsBySession,
-    native: { settings: state.settings, catalogClient, contract: state.serverContract, isCurrentCatalogClient,
+    native: { settings: state.settings, catalogClient, contract: 'hermes' as const, isCurrentCatalogClient,
       connectionScope: state.connectionScope, currentSessionId: state.currentSessionId, sessions: state.sessions,
       activeSessions, todoRecordsBySession: transcript.todoRecordsBySession,
       todosBySession: state.todosBySession, streamConnectedRef },
   }), [input.connection.enabled, values, busy, suspend, catalogClient, catalog.sessions, catalog.statuses, state.pendingPermissionsBySession,
-    state.pendingQuestionsBySession, state.settings, state.serverContract, isCurrentCatalogClient, state.connectionScope,
-    state.currentSessionId, state.sessions, activeSessions, transcript.todoRecordsBySession, state.todosBySession]);
+    state.pendingQuestionsBySession, state.settings, isCurrentCatalogClient, state.connectionScope,
+    state.currentSessionId, state.sessions, activeSessions, transcript.todoRecordsBySession, state.todosBySession, runs]);
 }
+
+// The transcript retry bridge is defined after the hooks it forwards to.

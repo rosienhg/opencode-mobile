@@ -88,7 +88,84 @@ async function optionalDiagnostic<T>(load: () => Promise<T>): Promise<OptionalDi
   }
 }
 
+// Hermes serves none of the OpenCode-only surfaces (terminals, MCP,
+// extensions, files/VCS). The adapter returns empty results so generic hooks
+// degrade gracefully; the UI hides these surfaces through ServerCapabilities.
+function createHermesServerAdapter(client: ScopedOpencodeClient): ServerAdapter {
+  const hermes = client.hermes!;
+  const unsupported = (surface: string) => async () => {
+    throw new Error(`Hermes has no ${surface} surface.`);
+  };
+  return {
+    terminals: {
+      list: async () => [],
+      create: unsupported('terminal'),
+      remove: async () => undefined,
+      resize: async () => undefined,
+      connectToken: unsupported('terminal'),
+    },
+    mcp: {
+      status: async () => ({}),
+      add: unsupported('MCP'),
+      remove: async () => undefined,
+      connect: async () => undefined,
+      disconnect: async () => undefined,
+      startOAuth: unsupported('MCP OAuth'),
+      completeOAuth: async () => undefined,
+    },
+    diagnostics: {
+      load: async () => {
+        let health: OptionalDiagnostic<{ healthy: boolean; version: string }>;
+        try {
+          const reply = await hermes.api.getHealth();
+          health = { available: true, data: { healthy: true, version: reply.version ?? '' } };
+        } catch (error) {
+          health = { available: false, error: getErrorMessage(error) };
+        }
+        return { health, mcp: { available: true, data: {} } };
+      },
+    },
+    capabilities: {
+      config: async () => ({}),
+      providers: async () => ({ all: [], connected: [], default: {} }),
+      providerAuth: async () => ({}),
+      agents: async () => [],
+      skills: async () => [],
+      references: async () => [],
+      modelVariants: () => [],
+      setCredentials: unsupported('provider credentials'),
+      removeCredentials: async () => undefined,
+      startAuthorization: unsupported('provider authorization'),
+      completeAuthorization: async () => undefined,
+    },
+    extensions: {
+      configEntries: async () => [],
+      plugins: async () => [],
+      skills: async () => [],
+      commands: async () => [],
+      readText: async () => undefined,
+      writeText: unsupported('file writes'),
+      runShell: unsupported('shell'),
+    },
+    projects: {
+      findFiles: async () => [],
+      listFiles: async () => [],
+      readFile: unsupported('file reads'),
+      readProjectFile: unsupported('file reads'),
+      downloadSource: unsupported('file downloads'),
+      fileStatus: async () => [],
+      vcsInfo: async () => ({}),
+      vcsDiff: async () => [],
+      saveFile: unsupported('file writes'),
+      listWorktrees: async () => [],
+      createWorktree: unsupported('worktrees'),
+      removeWorktree: async () => undefined,
+    },
+  };
+}
+
 export function createServerAdapter(client: ScopedOpencodeClient): ServerAdapter {
+  if (client.hermes) return createHermesServerAdapter(client);
   const location = { location: { directory: client.__opencode.directory } };
   const compatibility = client.compatibility;
 

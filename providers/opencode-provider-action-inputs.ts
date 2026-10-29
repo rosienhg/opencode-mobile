@@ -142,8 +142,7 @@ export type SessionActionsInput = {
 export type ConnectionActionsInput = {
   settings: OpencodeConnectionSettings;
   setSettings: Dispatch<SetStateAction<OpencodeConnectionSettings>>;
-  controlPlaneUrl: string;
-  setControlPlaneUrl: Dispatch<SetStateAction<string>>;
+  setCurrentSessionId: Dispatch<SetStateAction<string | undefined>>;
   connection: ConnectionState;
   setConnection: Dispatch<SetStateAction<ConnectionState>>;
   serverContract: ServerContract;
@@ -249,6 +248,5 @@ export type ConnectionConnectInput = Pick<ConnectionActionsInput,
   'setAvailableModels' | 'setAvailableAgents' | 'setMessagesBySession' | 'setDiffsBySession' | 'setTodosBySession' |
   'setChatPreferences' | 'setDiagnostics' | 'setSendingState' | 'setConnection' | 'setServerContract' | 'settingsRef' |
   'chatPreferencesRef' | 'serverContractRef' | 'connectionRef' | 'serverGenerationRef' | 'catalogGenerationRef' |
-  'scopeGenerationRef' | 'initialConnectStartedRef'> & {
-  connectSetup: import('@/providers/use-connect-state').ConnectSetup;
-};
+  'scopeGenerationRef' | 'initialConnectStartedRef'>;
+

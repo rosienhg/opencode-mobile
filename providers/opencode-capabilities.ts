@@ -17,6 +17,22 @@ export type ServerCapabilities = {
 };
 
 export function getServerCapabilities(contract: ServerContract): ServerCapabilities {
+  if (contract === 'hermes') {
+    // Hermes exposes none of the OpenCode-only surfaces. Everything app-side
+    // (chat, approvals, clarify, skills) is served by the hermes-ios plugin.
+    return {
+      contract,
+      fileSave: false,
+      fileStatus: false,
+      mcpOAuth: false,
+      savedPermissions: false,
+      autoApprove: false,
+      promptDeliveryAvailable: false,
+      mcpIntegrationId: false,
+      contextMentions: false,
+      shellCommand: false,
+    };
+  }
   const full = contract === 'v1';
   return {
     contract,

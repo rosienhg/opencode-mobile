@@ -11,8 +11,6 @@ export type WorkspaceValueOverrides = {
   onboardingCompleted: boolean;
   onboardingActive: boolean;
   connectionProfiles: ConnectionContextValue['connectionProfiles'];
-  connectSetup: ConnectionContextValue['connectSetup'];
-  servicesValue: ConnectionContextValue['services'];
   sharedInput: SharedInput;
   projectPathsByConnection: ProjectPathsByConnection;
   retry: (id: string) => Promise<ConnectionState>;
@@ -34,8 +32,6 @@ export function useWorkspaceValues(
     onboardingCompleted,
     onboardingActive,
     connectionProfiles,
-    connectSetup,
-    servicesValue,
     sharedInput,
     projectPathsByConnection,
     retry,
@@ -78,9 +74,7 @@ export function useWorkspaceValues(
     connect: () => retry(connectionId),
     switchConnection,
     connectionProfiles,
-    connectSetup,
-    services: servicesValue,
-  } : undefined), [baseConnection, connectionId, retry, switchConnection, connectionProfiles, connectSetup, servicesValue]);
+  } : undefined), [baseConnection, connectionId, retry, switchConnection, connectionProfiles]);
 
   const baseProjects = baseValues?.projectsValue;
   const projectsValue = useMemo(() => (baseProjects ? {

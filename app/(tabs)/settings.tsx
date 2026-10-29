@@ -41,7 +41,7 @@ function SettingsContent() {
   const { configuredProviders, currentConfig } = useCapabilities();
   const mcp = useMcp();
   const { chatPreferences, updateChatPreferences } = usePreferences();
-  const { connect, connection, settings, serverCapabilities, connectSetup, services: serviceManagement } = useConnection();
+  const { connect, connection, settings, serverCapabilities } = useConnection();
   const { activeProjectPath } = useProjects();
   const diagnosticsData = useDiagnostics();
   const { lastJsError, refreshLastJsError } = useLastJsError();
@@ -101,19 +101,6 @@ function SettingsContent() {
     }
   }
 
-  function openServiceEditor(id?: string) {
-    returnToCloudLink.current = true;
-    setOpenSection(undefined);
-    router.push(id ? `/service?id=${encodeURIComponent(id)}` : '/service');
-  }
-
-  useFocusEffect(useCallback(() => {
-    if (!returnToCloudLink.current) return;
-    returnToCloudLink.current = false;
-    setOpenSection('cloud-link');
-    void serviceManagement.refresh();
-  }, [serviceManagement]));
-
   useFocusEffect(useCallback(() => {
     refreshTtsSetup();
   }, [refreshTtsSetup]));
@@ -136,8 +123,6 @@ function SettingsContent() {
     t,
     palette,
     connection,
-    connectSetup,
-    serviceManagement,
     configuredProviders,
     currentConfig,
     mcp,
@@ -162,7 +147,6 @@ function SettingsContent() {
     advancedTab,
     setAdvancedTab,
     setOpenSection,
-    openServiceEditor,
   });
 
   const activeSection = sections.find((section) => section.id === openSection);

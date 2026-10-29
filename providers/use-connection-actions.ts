@@ -4,7 +4,7 @@ import { useConnectionConnectActions } from '@/providers/use-connection-connect-
 import { useConnectionLinkActions } from '@/providers/use-connection-link-actions';
 
 export function useConnectionActions(input: ConnectionActionsInput, shared: WorkspaceRuntimeInput) {
-  const connectActions = useConnectionConnectActions({ ...input, connectSetup: shared.connectSetup });
+  const connectActions = useConnectionConnectActions(input);
   const linkActions = useConnectionLinkActions({ ...input, ...connectActions });
-  return { ...connectActions, ...linkActions, connectionProfiles: shared.connectionProfiles, servicesValue: shared.servicesValue };
+  return { ...connectActions, ...linkActions, connectionProfiles: shared.connectionProfiles };
 }

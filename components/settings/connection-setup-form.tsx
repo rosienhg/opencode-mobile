@@ -3,13 +3,12 @@ import { useTranslation } from 'react-i18next';
 
 import { ConnectionMethodChooser } from '@/components/settings/connection-method-chooser';
 import { ConnectionProfileDialog, type ConnectionProfileFormValues } from '@/components/settings/connection-profile-dialog';
-import { ConnectionScanFlow } from '@/components/settings/connection-scan-flow';
 import { useConnection } from '@/providers/opencode-contexts';
 
-export function ConnectionSetupForm({ onPair, onConnected, onBusyChange }: { onPair: () => void; onConnected: () => void; onBusyChange: (busy: boolean) => void }) {
+export function ConnectionSetupForm({ onConnected, onBusyChange }: { onConnected: () => void; onBusyChange: (busy: boolean) => void }) {
   const { t } = useTranslation();
   const { settings, connectionProfiles } = useConnection();
-  const [mode, setMode] = useState<'manual' | 'scan'>();
+  const [mode, setMode] = useState<'manual'>();
   const profileId = useRef<string | undefined>(undefined);
   async function submit(values: ConnectionProfileFormValues) {
     onBusyChange(true);
@@ -24,8 +23,7 @@ export function ConnectionSetupForm({ onPair, onConnected, onBusyChange }: { onP
   }
   function dismiss() { profileId.current = undefined; setMode(undefined); }
   return <>
-    <ConnectionMethodChooser onScan={() => setMode('scan')} onManual={() => setMode('manual')} onPair={onPair} />
+    <ConnectionMethodChooser onManual={() => setMode('manual')} />
     {mode === 'manual' ? <ConnectionProfileDialog title={t('settings:connection.addConnection')} submitLabel={t('settings:connection.saveAndConnect')} initial={{ serverUrl: settings.serverUrl }} onBusyChange={onBusyChange} onSubmit={submit} onDismiss={dismiss} /> : null}
-    {mode === 'scan' ? <ConnectionScanFlow onBusyChange={onBusyChange} onSubmit={submit} onDismiss={dismiss} /> : null}
   </>;
 }
