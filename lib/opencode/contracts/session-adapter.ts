@@ -54,7 +54,10 @@ export type SessionAdapter = {
 const MAX_SESSION_PAGES = 10;
 
 // Hermes has no project/directory concept: one connection is one workspace.
-const HERMES_PROJECT: Project = { id: 'hermes', worktree: '', name: 'Hermes', time: { created: 0 } };
+// A truthy sentinel path keeps the project-scoped machinery (guards, cache
+// keys, presentation map) working unchanged.
+const HERMES_PROJECT_PATH = '/hermes';
+const HERMES_PROJECT: Project = { id: 'hermes', worktree: HERMES_PROJECT_PATH, name: 'Hermes', time: { created: 0 } };
 
 // The Hermes branch of the session adapter. Sessions, messages, runs, and
 // approvals all flow through the hermes-ios plugin's gateway proxy.
@@ -75,10 +78,10 @@ function createHermesSessionAdapter(client: ScopedOpencodeClient): SessionAdapte
     submitPrompt: async () => {
       throw new Error('Hermes runs are started through the run API, not prompt admission.');
     },
-    loadProjectCatalog: async () => ({ currentProjectPath: '', serverRootPath: '', serverProjects: [HERMES_PROJECT] }),
-    resolveProjectLocation: async () => ({ ...HERMES_PROJECT, directory: '' }),
-    isKnownProjectLocation: async () => false,
-    isAvailableProjectDirectory: async () => false,
+    loadProjectCatalog: async () => ({ currentProjectPath: HERMES_PROJECT_PATH, serverRootPath: HERMES_PROJECT_PATH, serverProjects: [HERMES_PROJECT] }),
+    resolveProjectLocation: async () => ({ ...HERMES_PROJECT, directory: HERMES_PROJECT_PATH }),
+    isKnownProjectLocation: async () => true,
+    isAvailableProjectDirectory: async (knownProjects: Project[]) => knownProjects.some((project) => project.id === HERMES_PROJECT.id),
     activeStatuses: async () => ({}),
     list: () => coalesceRead(client, 'hermes:sessions', async () => {
       const records = await api.listSessions(200);

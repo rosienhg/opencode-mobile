@@ -236,7 +236,7 @@ export function useChatViewController() {
     const nextDraft = promptOverride ?? snapshot.draft;
     const nextAttachments = snapshot.attachments;
     const prompt = nextDraft.trim();
-    if (!activeProject || (!prompt && nextAttachments.length === 0) || connection.status !== 'connected') {
+    if ((!prompt && nextAttachments.length === 0) || connection.status !== 'connected') {
       return;
     }
     const shellCommand = isV2 && serverCapabilities.shellCommand && nextAttachments.length === 0 && prompt.startsWith('!')
