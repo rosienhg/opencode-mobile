@@ -163,7 +163,7 @@ function SettingsContent() {
         </View>
       </Appbar.Header>
       <ScrollView style={[styles.screen, { backgroundColor: palette.background }]} contentContainerStyle={styles.content}>
-        {[{ label: t('common:servers.serverSettings'), ids: ['ai', 'extensions', 'advanced', 'permissions'], server: true },
+        {[{ label: t('common:servers.serverSettings'), ids: ['advanced', 'permissions'], server: true },
           { label: t('common:servers.appSettings'), ids: ['connection', 'cloud-link', 'general', 'notifications', 'voice', 'responses', 'support'], server: false }].map((group) => <View key={group.label} style={{ gap: 12, marginBottom: 20 }}>
           <Text variant="titleMedium">{group.label}</Text>
           {group.server ? <ServerContextPicker /> : null}
@@ -178,8 +178,8 @@ function SettingsContent() {
       </ScrollView>
 
       <OverlaySheet visible={Boolean(activeSection)} fitContent testID="settings-section-overlay" title={activeSection?.title ?? t('common:tabs.settings')} onClose={() => setOpenSection(undefined)}>
-        {['ai', 'extensions', 'advanced', 'permissions'].includes(activeSection?.id ?? '') ? <ServerContextPicker project={activeSection?.id === 'advanced' || activeSection?.id === 'extensions'} /> : null}
-        <View key={['ai', 'extensions', 'advanced', 'permissions'].includes(activeSection?.id ?? '') ? `${getConnectionUiScope(settings)}:${activeProjectPath ?? ''}` : activeSection?.id}>{activeSection?.render?.() ?? null}</View>
+        {['advanced', 'permissions'].includes(activeSection?.id ?? '') ? <ServerContextPicker project={activeSection?.id === 'advanced'} /> : null}
+        <View key={['advanced', 'permissions'].includes(activeSection?.id ?? '') ? `${getConnectionUiScope(settings)}:${activeProjectPath ?? ''}` : activeSection?.id}>{activeSection?.render?.() ?? null}</View>
       </OverlaySheet>
 
       <Snackbar

@@ -126,14 +126,6 @@ export function buildSettingsSections({
       onPress: () => setOpenSection('connection'),
       render: () => <ConnectionSection connection={connection} palette={palette} />,
     },
-    {
-      id: 'ai',
-      icon: 'creation',
-      title: t('settings:screen.categories.ai'),
-      summary: t('settings:screen.summaries.configuredCount', { value: configuredProviders.length }),
-      onPress: () => setOpenSection('ai'),
-      render: () => <AiSettingsPanel />,
-    },
     ...(serverCapabilities.contract === 'v2' ? [{
       id: 'extensions',
       icon: 'puzzle-outline' as const,
