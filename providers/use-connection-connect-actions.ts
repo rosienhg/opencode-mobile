@@ -219,7 +219,7 @@ export function useConnectionConnectActions({
       clearServerState();
     }
     return connected;
-  }, [catalogGenerationRef, clearServerState, initialConnectStartedRef, loadProjectCatalog, serverContractRef, serverGenerationRef, setConnection, setServerContract]);
+  }, [catalogGenerationRef, clearServerState, connectionRef, initialConnectStartedRef, loadProjectCatalog, serverContractRef, serverGenerationRef, setConnection, setServerContract]);
 
   const runConnect = useCallback((targetSettings: OpencodeConnectionSettings) => {
     const inFlight = connectInFlightRef.current;

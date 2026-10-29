@@ -413,6 +413,12 @@ export type ApprovalsContextValue = {
   };
 };
 
+// Hermes credential requests: pending requests filed by the agent, fulfilled
+// or cancelled from the app.
+export type CredentialsContextValue = {
+  credentials: import('@/providers/use-hermes-credentials').HermesCredentialsState;
+};
+
 export type ConversationContextValue = {
   conversation: ConversationState;
   clearConversationFeedback: () => void;

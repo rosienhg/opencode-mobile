@@ -1,311 +1,101 @@
 # AGENTS.md
 
-Follow the current implementation docs in `docs/`. Do not invent a new architecture.
+This is the **MyHermit mobile** fork of opencode-mobile: a Hermes-only client.
+The upstream docs in `docs/` still describe the OpenCode-era architecture where
+noted; the authoritative delta is `docs/hermes.md`. When the two disagree about
+Hermes behavior, `docs/hermes.md` wins.
 
-Read first:
+## Layering (unchanged from upstream)
 
-1. `docs/architecture.md`
-2. `docs/state-and-data.md`
-3. `docs/component-inventory.md`
-4. `docs/testing-and-validation.md`
+The app stays provider-centric:
 
-## Architecture Rule
-
-This app is provider-centric.
-
-- `providers/opencode-provider.tsx` owns domain state and orchestration.
+- `providers/use-opencode-provider-composition.ts` owns domain state and orchestration.
 - `app/` owns routing and thin screen wiring.
 - `components/` owns presentation and local UI state.
 - `providers/services/` owns provider-facing API aggregation.
-- `lib/` owns protocol, formatting, storage keys, notifications, and voice helpers.
-- `tests/fake-opencode/` and `tests/e2e/` define the behavioral contract.
+- `lib/hermes/` owns the Hermes protocol (auth, HTTP, SSE, runs, mapping).
+- `lib/opencode/` now holds two things only: the backend-agnostic domain
+  models (`types.ts`, `message-types.ts`, `format/`, `prompt-inbox.ts`) and the
+  OpenCode SDK adapters kept for reference — do not add new OpenCode code.
+- `tests/fake-hermes/` and `tests/vitest/hermes-*.test.ts` define the Hermes
+  behavioral contract.
 
 Do not move domain behavior into screens or presentational components.
 
-- New features that require API compatibility are V2-only for now; see
-  `docs/api-contract.md`. Do not add new V1 adapters or fallbacks.
+## Hermes architecture (see docs/hermes.md for the full protocol)
 
-## Placement Rules
+- **One server kind.** `ServerContract` is `'hermes'` in practice; `'v1'`/`'v2'`
+  remain in the type system for the upstream adapters but the connect flow only
+  accepts Hermes dashboards (detected via the public `/api/auth/providers`).
+- **Auth.** Headless RFC 8252 PKCE against the dashboard
+  (`authorize → password-login → /auth/native/token`), bearer + single-flight
+  refresh on 401, tokens in SecureStore keyed by the connection scope. The
+  password is stored with the connection profile (this fork's model) so a dead
+  refresh can re-sign-in silently.
+- **Gateway access is plugin-proxied.** All sessions/messages/runs go through
+  `/api/plugins/hermes-ios/gw/...`; clarify, live tool args, active-run lookup,
+  and skill expansion are plugin routes; credential requests are a separate
+  plugin. Missing plugin routes are connection errors with setup hints.
+- **Runs, not events.** There is no global event stream. `use-hermes-runs`
+  attaches to `/v1/runs/{id}/events` per run (resume via `Last-Event-ID`,
+  backoff 1→16s), polls `/runs/active` for the current session (15s, 3s while
+  busy-elsewhere), polls `/clarify` (2s while a run is live), and fetches full
+  tool args 300ms after tool events. Run events map onto the existing domain
+  state: statuses → `sessionStatuses`, approvals → `pendingPermissions`,
+  clarify → `pendingQuestions`, streamed turn → synthetic
+  `hermesLiveRecords` merged after the server transcript page.
+- **OpenCode-only surfaces are capability-gated off for Hermes**
+  (`ServerCapabilities`: no files/VCS/worktrees/PTY/MCP/extensions/auto-approve/
+  prompt-delivery/context-mentions/shell). Their contexts receive inert stubs in
+  the composition; the tab layout is Chat / Credentials / Settings.
 
-### `app/`
+## Change Mapping (Hermes)
 
-Put:
-
-- route entrypoints
-- tab/layout wiring
-- thin screen controllers
-- calls into `useOpencode()`
-
-Do not put:
-
-- fetch logic
-- session orchestration
-- capability reconciliation
-- protocol shaping
-
-### `components/`
-
-Put:
-
-- rendering
-- local UI state
-- chat/settings UI composition
-- surface-specific helpers
-
-Do not put:
-
-- API calls
-- persistence
-- shared domain state
-- cross-session caches
-
-### `providers/`
-
-Put:
-
-- connection flow
-- project/session state
-- refresh logic
-- permission/question handling
-- capability reconciliation
-- conversation mode state machine
-- SSE and polling fallback
-- persistence hydration and write-back
-
-Shared behavior across tabs belongs here.
-
-### `providers/services/`
-
-Put:
-
-- session fetch helpers
-- capability/config/provider discovery helpers
-
-Services aggregate requests. They do not own app state.
-
-### `lib/opencode/`
-
-Put:
-
-- client construction
-- endpoint wrappers
-- protocol types
-- message formatting
-- transcript transformation
-
-Raw server-shape handling belongs here, not in UI code.
-
-### `lib/`
-
-Put:
-
-- notifications
-- speech input/output
-- storage keys
-- platform integration helpers
-
-Platform side effects should start here or from the root shell, not from arbitrary components.
-
-### `tests/fake-opencode/`
-
-Put:
-
-- deterministic server scenarios
-- endpoint fixtures
-- SSE behavior
-- permission/question blocking logic
-
-If the client contract changes, update the fake server.
-Changes here require explicit human validation.
-
-### `tests/e2e/`
-
-Put:
-
-- boot flow coverage
-- prompt lifecycle coverage
-- blocking interaction flows
-- provider setup flows
-- SSE fallback coverage
-
-Prefer flow coverage over low-value unit tests for orchestration changes.
-Changes here require explicit human validation.
-
-## Practices
-
-- Keep screens thin.
-- Keep presentational components dumb except for local UI state.
-- Put code in the narrowest correct layer.
-- Extend existing helpers, selectors, and services before adding abstractions.
-- Keep protocol normalization close to `lib/opencode/`.
-- Keep persistence logic close to `providers/use-opencode-persistence.ts`.
-- Preserve continuity across tabs.
-- Respect the dual realtime model: SSE plus polling fallback.
-- Prefer deterministic state transitions over clever indirection.
-
-## Avoid
-
-- fetch logic in components
-- formatting or protocol parsing in screens
-- new shared state stores outside the provider
-- duplicated provider-derived state in local UI state
-- protocol changes hidden in UI code
-- unrelated refactors
-
-## Change Mapping
-
-### Chat
-
-- visuals, composer presentation, pagination, local interaction state: `components/chat/`
-- transcript shaping and activity derivation: `lib/opencode/` or provider selectors
-- prompt lifecycle, abort, pending interactions, refresh behavior: `providers/`
-
-### Project
-
-- screen wiring and list presentation: `app/(tabs)/projects.tsx`
-- project/session continuity rules: `providers/`
-- project/session fetch logic: `providers/services/session-service.ts`
-
-### Settings
-
-- section and dialog UI: `components/settings/`
-- persisted preferences and reconciliation: `providers/`
-- provider auth and capability requests: `providers/services/capabilities-service.ts` and `lib/opencode/client.ts`
-- extensions (MCP/plugin/skill/command config): `providers/use-extensions-state.ts`, `providers/services/extensions-service.ts`, and `lib/opencode/extensions/`
-- platform deep links and native integration: `lib/`
-
-### Protocol
-
-Update together when needed:
-
-- `lib/opencode/client.ts`
-- `lib/opencode/types.ts`
-- `lib/opencode/format.ts`
-- matching fake-server handlers in `tests/fake-opencode/`
-
-### Conversation mode, voice, notifications
-
-- orchestration and state machine: `providers/`
-- native wrappers: `lib/voice/` and `lib/notifications.ts`
-- UI affordances: `components/chat/`
-
-### Inbound sharing
-
-- staging and lifecycle: `providers/use-share-state.ts`
-- payload normalization and limits: `lib/share/parse.ts`
-- routing and preview: `app/+native-intent.ts` and `app/share.tsx`
-- receive plugin config and platform gaps: `app.config.ts` and
-  `docs/ios-share-parity.md`
-
-## Development Loop
-
-For each task:
-
-1. Read the relevant docs and implementation.
-2. Identify the correct layer.
-3. Make the smallest change that preserves documented behavior.
-4. Add or update tests when the behavior contract changes.
-5. Update docs when architecture, behavior, or contracts change.
-6. Run validation proportional to risk.
+- **Chat:** visuals/composer: `components/chat/`; transcript shaping stays in
+  `lib/opencode/format/` (records are mapped by `lib/hermes/mapping.ts`);
+  prompt lifecycle, queueing, abort: `providers/use-hermes-prompts.ts` +
+  `providers/use-hermes-runs.ts`.
+- **Connection:** sign-in, profiles, token rotation:
+  `providers/use-connection-connect-actions.ts`, `lib/hermes/auth.ts`,
+  `lib/hermes/tokens.ts`, `lib/hermes/client.ts` (pooled per identity).
+- **Credentials:** `providers/use-hermes-credentials.ts`,
+  `components/credentials/`, `app/(tabs)/credentials.tsx`.
+- **Approvals/clarify:** `providers/use-hermes-runs.ts` (state + wire) and the
+  existing question-flow/permission-card components.
+- **Protocol:** update `lib/hermes/wire.ts`, `lib/hermes/api.ts`,
+  `lib/hermes/run.ts`, and the matching fake server in `tests/fake-hermes/`
+  together.
+- **Slash commands:** built-ins live in `use-opencode-provider-composition.ts`
+  (`HERMES_BUILT_IN_COMMANDS` + `hermesCommandActions`); skills come from
+  `GET /api/plugins/hermes-ios/commands` and expand through
+  `commands/expand`.
 
 ## Validation
 
-Baseline:
+Baseline (must pass before push):
 
 ```bash
 npm run lint
-npm run typecheck
+npm run typecheck           # tsc --noEmit
+npx vitest run              # 100+ suites incl. Hermes protocol + integration
 ```
 
-Run when relevant:
+Notes:
 
-- fake backend or protocol changes:
-  - `npm run test:fake-server:self`
-- provider, session, blocking flow, SSE, polling, or user-flow changes:
-  - `npm run test:e2e:web`
-- native or Android-risk changes:
-  - `npm run build:development:android`
-
-### Before Push
-
-CI runs the `validate` job. It must be green, so run the same checks locally and do not push until they pass:
-
-```bash
-npm run test:ci:static
-npm run test:fake-server:self
-npm run test:e2e:web
-```
-
-A red e2e run is blocking. If a failure looks intermittent, rerun the failing test to confirm and harden it before pushing rather than pushing over a flaky check.
-
-### Fast iteration
-
-CI runs Playwright in one job with four workers; each worker has its own fake
-V1/V2 pair, so the per-worker global scenario stays isolated. For iteration:
-
-```bash
-npm run test:ci:static          # cached; ~15s when warm, ~45s cold
-npm run test:e2e:smoke          # 17 critical flows
-npm run test:e2e:last-failed
-npm run test:e2e:web:isolated -- tests/e2e/chat.spec.mjs
-```
-
-After one `npm run build:web:e2e`, keep `npm run serve:web:prebuilt` running in
-another terminal so Playwright reuses the export instead of rebuilding it.
-Concurrent runs should use `test:e2e:web:isolated` (fresh port block) rather
-than the shared defaults. Override the worker count with `E2E_WORKERS`; it
-defaults to 2 locally and 4 in CI. The smoke set and targeted specs are for
-iteration; the full `test:e2e:web` gate above is still required before
-push/release. New coverage that does not need the browser belongs in Vitest.
-
-### Local mirror for heavy checks
-
-The project root may live on an external or network drive. To speed up lint,
-typecheck, the `test:*` suites, and native builds, you may copy the working tree
-to a local temporary directory on this machine (for example under
-`/private/var/folders/...` or `$TMPDIR`).
-
-The project root on the (possibly remote) drive remains the single source of
-truth:
-
-- make every source edit in the project root, never in the mirror
-- sync the working tree (or at least the changed files) into the mirror before
-  running a check, and treat mirror output as read-only evidence
-- never commit, tag, or push from the mirror
-- when a check regenerates a committed file (for example `npm run gen:i18n`),
-  run the generator in the project root and commit the root copy, not the
-  mirror's
-
-For every release version increase, add or update
-`fastlane/metadata/android/en-US/changelogs/<android.versionCode>.txt` with
-concise user-facing release notes. The filename must match `android.versionCode`
-in `app.config.ts`, and the changelog must be included in the release commit.
-
-## Tests
-
-This repo validates behavior mainly with static checks and end-to-end flows.
-
-Add or update tests when changing:
-
-- hydration or connect flow
-- project discovery or session bootstrap
-- prompt submission lifecycle
-- permission or question flows
-- provider/model/agent capability discovery
-- SSE or polling fallback behavior
-- fake server contract behavior
-
-Any change to `tests/e2e/` or `tests/fake-opencode/` requires explicit human validation, even if automated checks pass.
+- The upstream Playwright e2e suite (`tests/e2e/`) still drives OpenCode fake
+  servers and is expected to fail until its flows are rebuilt against
+  `tests/fake-hermes/`. Treat Hermes integration tests as the gate for now;
+  rebuilding the e2e flows is tracked in docs/hermes.md.
+- Architecture ratchets still apply: 500-line file cap, provider wrapper ≤60
+  lines, ≤127 context members, no `fetch` in `app/`/`components/`.
 
 ## Definition Of Done
 
-A change is done when:
-
-- code is in the correct layer
+- code is in the correct layer (Hermes protocol → `lib/hermes/`, orchestration →
+  providers, presentation → components)
 - behavior is preserved or intentionally updated
-- tests are added or updated for changed behavior
-- any `tests/e2e/` or `tests/fake-opencode/` changes have explicit human validation
-- documentation in `docs/` is updated when behavior, architecture, or contracts changed
-- the pre-push CI-equivalent checks pass (`test:ci:static`, `test:fake-server:self`, `test:e2e:web`)
-- validation matches the risk of the change
-- the final summary states what changed, what was verified, and any remaining risk
+- `lib/hermes/` contract changes update both unit suites and the fake server
+- docs updated when behavior/architecture changes (`docs/hermes.md` is the
+  source of truth for Hermes behavior)
+- lint, typecheck, and vitest pass
+- the final summary states what changed, what was verified, and remaining risk

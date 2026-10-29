@@ -3,7 +3,8 @@
     "chat": "聊天",
     "terminal": "终端",
     "projects": "项目",
-    "settings": "设置"
+    "settings": "设置",
+    "credentials": "Credentials"
   },
   "actions": {
     "cancel": "取消",

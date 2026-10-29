@@ -109,7 +109,7 @@ function UpdateHost() {
   const pathname = usePathname();
   const updates = useUpdates();
   const { setSurfaceActive } = updates;
-  const eligible = ['/', '/projects', '/settings', '/terminal'].includes(pathname);
+  const eligible = ['/', '/credentials', '/settings'].includes(pathname);
   useLayoutEffect(() => {
     setSurfaceActive(eligible);
     return () => setSurfaceActive(false);

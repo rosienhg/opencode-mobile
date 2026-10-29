@@ -8,6 +8,7 @@
 
 import enChat from '@/lib/i18n/locales/en/chat.json';
 import enCommon from '@/lib/i18n/locales/en/common.json';
+import enCredentials from '@/lib/i18n/locales/en/credentials.json';
 import enNotifications from '@/lib/i18n/locales/en/notifications.json';
 import enOnboarding from '@/lib/i18n/locales/en/onboarding.json';
 import enProject from '@/lib/i18n/locales/en/project.json';
@@ -16,6 +17,7 @@ import enShare from '@/lib/i18n/locales/en/share.json';
 import enTerminal from '@/lib/i18n/locales/en/terminal.json';
 import deChat from '@/lib/i18n/locales/de/chat.json';
 import deCommon from '@/lib/i18n/locales/de/common.json';
+import deCredentials from '@/lib/i18n/locales/de/credentials.json';
 import deNotifications from '@/lib/i18n/locales/de/notifications.json';
 import deOnboarding from '@/lib/i18n/locales/de/onboarding.json';
 import deProject from '@/lib/i18n/locales/de/project.json';
@@ -24,6 +26,7 @@ import deShare from '@/lib/i18n/locales/de/share.json';
 import deTerminal from '@/lib/i18n/locales/de/terminal.json';
 import esChat from '@/lib/i18n/locales/es/chat.json';
 import esCommon from '@/lib/i18n/locales/es/common.json';
+import esCredentials from '@/lib/i18n/locales/es/credentials.json';
 import esNotifications from '@/lib/i18n/locales/es/notifications.json';
 import esOnboarding from '@/lib/i18n/locales/es/onboarding.json';
 import esProject from '@/lib/i18n/locales/es/project.json';
@@ -32,6 +35,7 @@ import esShare from '@/lib/i18n/locales/es/share.json';
 import esTerminal from '@/lib/i18n/locales/es/terminal.json';
 import frChat from '@/lib/i18n/locales/fr/chat.json';
 import frCommon from '@/lib/i18n/locales/fr/common.json';
+import frCredentials from '@/lib/i18n/locales/fr/credentials.json';
 import frNotifications from '@/lib/i18n/locales/fr/notifications.json';
 import frOnboarding from '@/lib/i18n/locales/fr/onboarding.json';
 import frProject from '@/lib/i18n/locales/fr/project.json';
@@ -40,6 +44,7 @@ import frShare from '@/lib/i18n/locales/fr/share.json';
 import frTerminal from '@/lib/i18n/locales/fr/terminal.json';
 import hiChat from '@/lib/i18n/locales/hi/chat.json';
 import hiCommon from '@/lib/i18n/locales/hi/common.json';
+import hiCredentials from '@/lib/i18n/locales/hi/credentials.json';
 import hiNotifications from '@/lib/i18n/locales/hi/notifications.json';
 import hiOnboarding from '@/lib/i18n/locales/hi/onboarding.json';
 import hiProject from '@/lib/i18n/locales/hi/project.json';
@@ -48,6 +53,7 @@ import hiShare from '@/lib/i18n/locales/hi/share.json';
 import hiTerminal from '@/lib/i18n/locales/hi/terminal.json';
 import jaChat from '@/lib/i18n/locales/ja/chat.json';
 import jaCommon from '@/lib/i18n/locales/ja/common.json';
+import jaCredentials from '@/lib/i18n/locales/ja/credentials.json';
 import jaNotifications from '@/lib/i18n/locales/ja/notifications.json';
 import jaOnboarding from '@/lib/i18n/locales/ja/onboarding.json';
 import jaProject from '@/lib/i18n/locales/ja/project.json';
@@ -56,6 +62,7 @@ import jaShare from '@/lib/i18n/locales/ja/share.json';
 import jaTerminal from '@/lib/i18n/locales/ja/terminal.json';
 import ptChat from '@/lib/i18n/locales/pt/chat.json';
 import ptCommon from '@/lib/i18n/locales/pt/common.json';
+import ptCredentials from '@/lib/i18n/locales/pt/credentials.json';
 import ptNotifications from '@/lib/i18n/locales/pt/notifications.json';
 import ptOnboarding from '@/lib/i18n/locales/pt/onboarding.json';
 import ptProject from '@/lib/i18n/locales/pt/project.json';
@@ -64,6 +71,7 @@ import ptShare from '@/lib/i18n/locales/pt/share.json';
 import ptTerminal from '@/lib/i18n/locales/pt/terminal.json';
 import zhChat from '@/lib/i18n/locales/zh/chat.json';
 import zhCommon from '@/lib/i18n/locales/zh/common.json';
+import zhCredentials from '@/lib/i18n/locales/zh/credentials.json';
 import zhNotifications from '@/lib/i18n/locales/zh/notifications.json';
 import zhOnboarding from '@/lib/i18n/locales/zh/onboarding.json';
 import zhProject from '@/lib/i18n/locales/zh/project.json';
@@ -75,6 +83,7 @@ export const resources = {
   en: {
     chat: enChat,
     common: enCommon,
+    credentials: enCredentials,
     notifications: enNotifications,
     onboarding: enOnboarding,
     project: enProject,
@@ -85,6 +94,7 @@ export const resources = {
   de: {
     chat: deChat,
     common: deCommon,
+    credentials: deCredentials,
     notifications: deNotifications,
     onboarding: deOnboarding,
     project: deProject,
@@ -95,6 +105,7 @@ export const resources = {
   es: {
     chat: esChat,
     common: esCommon,
+    credentials: esCredentials,
     notifications: esNotifications,
     onboarding: esOnboarding,
     project: esProject,
@@ -105,6 +116,7 @@ export const resources = {
   fr: {
     chat: frChat,
     common: frCommon,
+    credentials: frCredentials,
     notifications: frNotifications,
     onboarding: frOnboarding,
     project: frProject,
@@ -115,6 +127,7 @@ export const resources = {
   hi: {
     chat: hiChat,
     common: hiCommon,
+    credentials: hiCredentials,
     notifications: hiNotifications,
     onboarding: hiOnboarding,
     project: hiProject,
@@ -125,6 +138,7 @@ export const resources = {
   ja: {
     chat: jaChat,
     common: jaCommon,
+    credentials: jaCredentials,
     notifications: jaNotifications,
     onboarding: jaOnboarding,
     project: jaProject,
@@ -135,6 +149,7 @@ export const resources = {
   pt: {
     chat: ptChat,
     common: ptCommon,
+    credentials: ptCredentials,
     notifications: ptNotifications,
     onboarding: ptOnboarding,
     project: ptProject,
@@ -145,6 +160,7 @@ export const resources = {
   zh: {
     chat: zhChat,
     common: zhCommon,
+    credentials: zhCredentials,
     notifications: zhNotifications,
     onboarding: zhOnboarding,
     project: zhProject,

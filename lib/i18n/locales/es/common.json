@@ -3,7 +3,8 @@
     "chat": "Chat",
     "terminal": "Terminal",
     "projects": "Proyectos",
-    "settings": "Ajustes"
+    "settings": "Ajustes",
+    "credentials": "Credenciales"
   },
   "actions": {
     "cancel": "Cancelar",

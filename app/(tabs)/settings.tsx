@@ -83,7 +83,6 @@ function SettingsContent() {
   const [openSection, setOpenSection] = useState<string>();
   // Reopening Cloud Link after the full-screen service editor returns keeps the
   // user in context without leaving a portal sheet over the pushed route.
-  const returnToCloudLink = useRef(false);
   const { voices: availableSpeechVoices, isLoading: isRefreshingSpeechVoices } = useSpeechVoices();
 
   async function handleConnect() {
@@ -118,7 +117,6 @@ function SettingsContent() {
     [chatPreferences.workingSoundVariant],
   );
 
-  // eslint-disable-next-line react-hooks/refs -- the builder stores this callback; it never invokes it during render.
   const sections = buildSettingsSections({
     t,
     palette,

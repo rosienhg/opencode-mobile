@@ -6,6 +6,7 @@ import {
   ChatContext,
   ConnectionContext,
   ConversationContext,
+  CredentialsContext,
   CurrentSessionContext,
   DiagnosticsContext,
   ExtensionsContext,
@@ -46,6 +47,7 @@ export function OpencodeProviderTree({ children, updates, values }: OpencodeProv
                     <SessionLibraryContext.Provider value={values.sessionLibraryValue}>
                       <ChatContext.Provider value={values.chatValue}>
                         <ApprovalsContext.Provider value={values.approvalsValue}>
+                          <CredentialsContext.Provider value={values.credentialsValue}>
                           <ConversationContext.Provider value={values.conversationValue}>
                             <TerminalContext.Provider value={values.terminalValue}>
                               <McpContext.Provider value={values.mcpValue}>
@@ -55,6 +57,7 @@ export function OpencodeProviderTree({ children, updates, values }: OpencodeProv
                               </McpContext.Provider>
                             </TerminalContext.Provider>
                           </ConversationContext.Provider>
+                          </CredentialsContext.Provider>
                         </ApprovalsContext.Provider>
                       </ChatContext.Provider>
                     </SessionLibraryContext.Provider>

@@ -41,7 +41,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   useWorkspaceAutoApprove(manager);
   const { updateSettings: updateWorkspaceSettings, retry, change, removeConnection: removeWorkspaceConnection, connectedWorkspace } = manager;
   const { setFavoriteSessions, setLastSessionByConnection, setProjectPathsByConnection, setSettings, setActiveProjectPath, setChatPreferences } = shell;
-  const { connections, focus, snapshots, ensure, resolveKey, switchConnection, activate, navigate, openExternalSession, disconnect } = manager;
+  const { connections, focus, snapshots, ensure, resolveKey, switchConnection, activate, navigate, openExternalSession } = manager;
   const selectedRuntime = focus ? snapshots[resolveKey(focus)] : undefined;
   const [retainedRuntime, setRetainedRuntime] = useState(selectedRuntime);
   if (selectedRuntime && retainedRuntime !== selectedRuntime) setRetainedRuntime(selectedRuntime);
@@ -52,12 +52,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const updateSettings = useCallback<ConnectionContextValue['updateSettings']>((patch) => {
     if (settingsConnectionId) updateWorkspaceSettings(settingsConnectionId, { ...settings, ...patch });
   }, [settingsConnectionId, updateWorkspaceSettings, settings]);
-  const profileRefreshed = useCallback((previous: ConnectionProfile, next: ConnectionProfile) => {
-    const oldScope = getConnectionScope(previous), newScope = getConnectionScope(next);
-    setFavoriteSessions((items) => items.map((entry) => entry.connectionScope === oldScope ? { ...entry, connectionScope: newScope } : entry));
-    setLastSessionByConnection((value) => ({ ...value, [newScope]: { ...value[oldScope], ...value[newScope] } }));
-    setProjectPathsByConnection((value) => ({ ...value, [newScope]: value[newScope] ?? value[oldScope] ?? [] }));
-  }, [setFavoriteSessions, setLastSessionByConnection, setProjectPathsByConnection]);
+
   const profileSaved = useCallback((profile: ConnectionProfile, secrets: { password: string; headers: Record<string, string> }, previous?: ConnectionProfile) => {
     const id = getConnectionUiScope(previous ?? profile);
     change((current) => current.map((entry) => entry.id === id ? { ...entry, name: profile.name } : entry));
@@ -85,7 +80,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       if (!entry && target.connectionScope) {
         const profile = findProfileByConnectionScope(await loadConnectionProfiles(), target.connectionScope);
         if (!profile) throw new Error('The saved connection for this session is not available.');
-        const [password, headers] = await Promise.all([getProfilePassword(profile.id), getProfileHeaders(profile.id)]);
+        const password = await getProfilePassword(profile.id);
         if (signal?.aborted) throw new Error('This session link was cancelled.');
         await switchConnection({ serverUrl: profile.serverUrl, username: profile.username, password }, profile.modelPreferences);
         entry = { id: getConnectionUiScope(profile), projects: [''], enabled: true };

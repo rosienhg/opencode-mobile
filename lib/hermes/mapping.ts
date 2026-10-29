@@ -1,6 +1,6 @@
 import type { Part, Message } from '@/lib/opencode/message-types';
 import type { SessionMessageRecord } from '@/lib/opencode/format/types';
-import type { Session, SessionStatus } from '@/lib/opencode/types';
+import type { Command, Session, SessionStatus } from '@/lib/opencode/types';
 import type { ModelOption } from '@/providers/opencode-model-selection';
 import type { PendingPermissionRequest, PendingQuestionRequest } from '@/lib/opencode/client/types';
 import type {
@@ -12,8 +12,6 @@ import type {
   SkillCommand,
   ToolCallWire,
 } from '@/lib/hermes/wire';
-import type { Command } from '@/lib/opencode/types';
-
 // Hermes timestamps are epoch seconds; the app's domain model uses millis.
 function toMillis(seconds: number | undefined): number {
   return typeof seconds === 'number' && seconds > 0 ? Math.round(seconds * 1000) : 0;

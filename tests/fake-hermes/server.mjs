@@ -383,7 +383,6 @@ export function createFakeHermes(options = {}) {
     const messagesMatch = upstream.match(/^api\/sessions\/([^/]+)\/messages$/);
     const forkMatch = upstream.match(/^api\/sessions\/([^/]+)\/fork$/);
     const runsMatch = upstream === 'v1/runs';
-    const runMatch = upstream.match(/^v1\/runs\/([^/]+)$/);
     const eventsMatch = upstream.match(/^v1\/runs\/([^/]+)\/events$/);
     const approvalMatch = upstream.match(/^v1\/runs\/([^/]+)\/approval$/);
     const stopMatch = upstream.match(/^v1\/runs\/([^/]+)\/stop$/);

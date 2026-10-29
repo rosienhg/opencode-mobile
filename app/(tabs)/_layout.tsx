@@ -48,28 +48,19 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'OpenCode Mobile',
+          title: 'MyHermit',
           tabBarLabel: label('/', t('common:tabs.chat')),
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="message.fill" color={iconColor('/', color)} />,
           tabBarButton: (props) => <HapticTab {...props} route="/" />,
         }}
       />
       <Tabs.Screen
-        name="terminal"
+        name="credentials"
         options={{
-          title: t('common:tabs.terminal'),
-          tabBarLabel: label('/terminal', t('common:tabs.terminal')),
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="terminal.fill" color={iconColor('/terminal', color)} />,
-          tabBarButton: (props) => <HapticTab {...props} route="/terminal" />,
-        }}
-      />
-      <Tabs.Screen
-        name="projects"
-        options={{
-          title: t('common:tabs.projects'),
-          tabBarLabel: label('/projects', t('common:tabs.projects')),
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="folder.fill" color={iconColor('/projects', color)} />,
-          tabBarButton: (props) => <HapticTab {...props} route="/project" />,
+          title: t('common:tabs.credentials'),
+          tabBarLabel: label('/credentials', t('common:tabs.credentials')),
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="key.fill" color={iconColor('/credentials', color)} />,
+          tabBarButton: (props) => <HapticTab {...props} route="/credentials" />,
         }}
       />
       <Tabs.Screen

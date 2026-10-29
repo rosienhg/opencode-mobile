@@ -16,7 +16,7 @@ describe('iOS Personal Team config', () => {
     };
 
     const production = loadConfig();
-    assert.equal(production.ios.bundleIdentifier, 'app.getopencode.mobile');
+    assert.equal(production.ios.bundleIdentifier, 'uk.co.nickhg.myhermit');
     assert.ok(production.plugins.includes('expo-notifications'));
     assert.equal(production.plugins.some((plugin: unknown) => (plugin as Function).name === 'withoutPushEntitlement'), false);
 
@@ -25,7 +25,7 @@ describe('iOS Personal Team config', () => {
       EXPO_IOS_BUNDLE_ID: 'com.example.opencode',
     });
     assert.equal(personalTeam.ios.bundleIdentifier, 'com.example.opencode');
-    assert.equal(loadConfig({ EXPO_APP_VARIANT: 'development' }).ios.bundleIdentifier, 'app.getopencode.mobile.dev');
+    assert.equal(loadConfig({ EXPO_APP_VARIANT: 'development' }).ios.bundleIdentifier, 'uk.co.nickhg.myhermit.dev');
     assert.equal(loadConfig({ EXPO_APP_VARIANT: 'development', EXPO_IOS_BUNDLE_ID: 'com.example.dev' }).ios.bundleIdentifier, 'com.example.dev');
     const stripEntitlement = personalTeam.plugins.find((plugin: unknown) => (plugin as Function).name === 'withoutPushEntitlement');
     assert.equal(typeof stripEntitlement, 'function');

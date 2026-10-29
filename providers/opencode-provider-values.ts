@@ -23,6 +23,7 @@ import type {
   DiagnosticsContextValue,
   DiffScope,
   DiffTurn,
+  CredentialsContextValue,
   ExtensionsContextValue,
   McpContextValue,
   OnboardingContextValue,
@@ -177,6 +178,8 @@ export function useOpencodeProviderValues(input: ProviderValuesInput) {
     serverContract,
     sharedInput,
     servicesValue,
+    hermesLiveRecords,
+    credentialsState,
   } = input;
 
   const activeSession = useMemo(
@@ -184,10 +187,24 @@ export function useOpencodeProviderValues(input: ProviderValuesInput) {
     [currentSessionId, sessions],
   );
 
-  const currentMessages = useMemo(
-    () => (currentSessionId ? messagesBySession[currentSessionId] || [] : []),
-    [currentSessionId, messagesBySession],
-  );
+  const currentMessages = useMemo(() => {
+    if (!currentSessionId) return [];
+    const server = messagesBySession[currentSessionId] || [];
+    const live = hermesLiveRecords?.[currentSessionId];
+    if (!live?.length) return server;
+    // Drop synthetic pending user rows whose text the server has already
+    // persisted (Hermes writes the user message when the run starts).
+    const persistedUserTexts = new Set(server
+      .filter((record) => record.info.role === 'user')
+      .map((record) => record.parts.find((part) => part.type === 'text')?.text ?? ''));
+    const kept = live.filter((record) => {
+      if (!record.info.id.startsWith('pending-')) return true;
+      const text = record.parts.find((part) => part.type === 'text')?.text ?? '';
+      return !persistedUserTexts.has(text);
+    });
+    if (kept.length === 0) return server;
+    return [...server, ...kept];
+  }, [currentSessionId, messagesBySession, hermesLiveRecords]);
   const pendingPrompts = useMemo(() => {
     const delivered = new Set(currentMessages.map((record) => record.info.id));
     return (pendingPromptsBySession?.[currentSessionId ?? ''] ?? []).filter((prompt) => !delivered.has(prompt.id));
@@ -370,6 +387,11 @@ export function useOpencodeProviderValues(input: ProviderValuesInput) {
     [extensions],
   );
 
+  const credentialsValue = useMemo<CredentialsContextValue>(
+    () => ({ credentials: credentialsState }),
+    [credentialsState],
+  );
+
   return useMemo(() => ({
     onboardingValue,
     connectionValue,
@@ -386,6 +408,7 @@ export function useOpencodeProviderValues(input: ProviderValuesInput) {
     terminalValue,
     mcpValue,
     extensionsValue,
+    credentialsValue,
   }), [onboardingValue, connectionValue, diagnosticsValue, capabilitiesValue, preferencesValue, projectsValue,
-    projectFilesValue, currentSessionValue, sessionLibraryValue, chatValue, approvalsValue, conversationValue, terminalValue, mcpValue, extensionsValue]);
+    projectFilesValue, currentSessionValue, sessionLibraryValue, chatValue, approvalsValue, conversationValue, terminalValue, mcpValue, extensionsValue, credentialsValue]);
 }

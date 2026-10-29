@@ -1,9 +1,9 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type { ScopedOpencodeClient } from '@/lib/opencode/client';
+import type { PendingPrompt } from '@/lib/opencode/prompt-inbox';
 import type { SessionMessageRecord } from '@/lib/opencode/format';
 import type { TranscriptRefreshMode } from '@/providers/opencode-provider-types';
-import type { PendingPrompt } from '@/lib/opencode/prompt-inbox';
 import type { ChatPreferences } from '@/providers/opencode-preferences';
 import type { ModelOption } from '@/providers/opencode-model-selection';
 import { pendingNotificationKey } from '@/lib/notification-pending';
@@ -38,7 +38,6 @@ export function useHermesPrompts(input: HermesPromptsInput) {
     runs,
     busyNotificationsRef,
     promptSubmissionRef,
-    refreshMessages,
   } = input;
 
   const inputRef = useRef(input);
@@ -59,16 +58,18 @@ export function useHermesPrompts(input: HermesPromptsInput) {
         provider = selected.providerID;
       }
     }
-    // Skill commands must be expanded server-side before they become a run;
-    // only known skill names go through the expand round-trip.
+    // Skill commands must be expanded server-side before they become a run.
+    // An unknown slash command is treated as a skill attempt, which fails with
+    // the plugin's "unknown command" error instead of reaching the agent.
     let runInput = text;
     const draft = text.trim();
     if (draft.startsWith('/')) {
       const name = draft.slice(1).split(/\s/)[0]?.toLowerCase().replace(/_/g, '-') ?? '';
-      if (name && skillCommandNames.includes(name)) {
-        const expanded = await hermes.api.expandSkillCommand(draft);
-        runInput = expanded.input;
+      if (!name || !skillCommandNames.includes(name)) {
+        throw new Error(`Unknown command: /${name || draft.slice(1)}`);
       }
+      const expanded = await hermes.api.expandSkillCommand(draft);
+      runInput = expanded.input;
     }
     const runId = await hermes.api.startRun({
       input: runInput,

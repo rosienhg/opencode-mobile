@@ -3,7 +3,8 @@
     "chat": "チャット",
     "terminal": "ターミナル",
     "projects": "プロジェクト",
-    "settings": "設定"
+    "settings": "設定",
+    "credentials": "Credentials"
   },
   "actions": {
     "cancel": "キャンセル",

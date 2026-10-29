@@ -1,245 +1,88 @@
-# OpenCode Mobile
+# MyHermit (mobile)
 
 <p align="center">
-  <strong>Your OpenCode workflow, in your pocket.</strong>
+  <strong>Your Hermes Agent, in your pocket.</strong>
 </p>
 
 <p align="center">
-  Start tasks, check progress, review changes, use the terminal, speak follow-ups, and manage OpenCode workspaces from Android and iOS.
-</p>
-
-<p align="center">
-  <a href="https://play.google.com/store/apps/details?id=app.getopencode">
-    <img src="https://img.shields.io/badge/Get_it_on-Google_Play-4285F4?style=for-the-badge&logo=googleplay&logoColor=white" alt="Get it on Google Play">
-  </a>
-  <a href="https://testflight.apple.com/join/ddcE5Wzz">
-    <img src="https://img.shields.io/badge/Join_iOS_Beta-TestFlight-0D96F6?style=for-the-badge&logo=apple&logoColor=white" alt="Join iOS TestFlight">
-  </a>
-  <a href="https://github.com/alvarolorentedev/opencode-mobile/releases/latest/download/opencode-mobile.apk">
-    <img src="https://img.shields.io/badge/Download-APK-18A748?style=for-the-badge&logo=android&logoColor=white" alt="Download APK">
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://getopencode.app/">Website</a> ·
-  <a href="https://getopencode.app/docs/">Docs</a> ·
-  <a href="https://getopencode.app/support/">Support</a>
+  Start chats, watch runs stream in, answer clarify questions, approve actions, and
+  fill in credential requests — from Android and iOS.
 </p>
 
 ---
 
-## OpenCode, without being tied to your laptop
-
-OpenCode Mobile is an independent, community-built mobile companion for [OpenCode](https://opencode.ai/).
-
-It connects to the OpenCode server you already run and gives you a focused mobile control surface for the moments when you need to check, guide, approve, or continue agent work away from your desk.
-
-It is not trying to put a desktop IDE on a smaller screen.
-
-It is designed around the things that actually matter on mobile.
-
-  <video
-     controls
-     playsinline
-     preload="none"
-     min-height="720"
-     poster="https://github.com/user-attachments/assets/32c7526a-9b7f-4590-96eb-a0105003840d"
-     src="https://github.com/user-attachments/assets/ea4a03dd-10b2-48f6-8fca-2e4cd76877e7"
-   />
-
-## What you can do
-
-- **Start and continue coding sessions**  
-  Pick an agent and model, send instructions, and keep working with the same OpenCode sessions from your phone.
-
-- **Watch agent progress**  
-  See what OpenCode is doing instead of waiting for a generic completion notification.
-
-- **Review and approve actions**  
-  Respond to permission requests and inspect the work before accepting changes.
-
-- **Manage workspaces and sessions**  
-  Switch between multiple OpenCode servers, projects, sessions, and models.
-
-- **Use the terminal when needed**  
-  Run focused commands without reopening your laptop.
-
-- **Browse and patch files**  
-  Inspect project files and make targeted changes from mobile.
-
-- **Use voice input**  
-  Dictate prompts or continue a conversation when typing is inconvenient.
-
-- **Understand model usage**  
-  Inspect context utilization, token activity, model usage, steps, and estimated cost.
-
-- **Stay connected to multiple servers**  
-  Save OpenCode connections with their own sessions and model selection.
+MyHermit mobile is a React Native (Expo) client for a self-hosted
+[Hermes Agent](https://hermes-agent.nousresearch.com/docs/) server. It began as a
+fork of [opencode-mobile](https://github.com/alvarolorentedev/opencode-mobile)
+(whose excellent chat UX this app keeps) and was adapted to speak the Hermes
+protocol the same way the native MyHermit apps do.
 
 ## How it works
-
-Your code stays on the machine running OpenCode.
-
-OpenCode Mobile connects to that server remotely:
 
 ```text
 Your phone
     │
-    │ HTTPS / secure tunnel
+    │  HTTPS (LAN, VPN, or tunnel)
     ▼
-OpenCode server
+Hermes dashboard  (default http://hermes.local, port 80)
     │
-    ▼
-Your workspace + models
+    ├─ Sign-in: headless PKCE (/auth/native/*), bearer + refresh tokens
+    ├─ hermes-ios plugin: /api/plugins/hermes-ios/gw/... proxies the Hermes
+    │  API server for sessions, messages, and runs — the API key never
+    │  leaves the server
+    └─ hermes-cred-requests plugin: credential requests the agent files,
+          fulfilled from the Credentials tab
 ```
 
-A typical setup looks like this:
+The Hermes **gateway itself is never called directly**; everything flows through
+the dashboard and the `hermes-ios` plugin, exactly like the native MyHermit apps.
 
-### 1. Start OpenCode
+## What you can do
 
-```bash
-opencode serve --port 4096
-```
+- **Chat with Hermes** — sessions list, streamed runs (reasoning, tool calls,
+  replies) with `Last-Event-ID` resume, stop, message queueing while a run is
+  active.
+- **Approve actions** — run approvals surface as permission cards.
+- **Answer clarify questions** — Hermes parks a `clarify` tool call; the app
+  polls the plugin and renders the questions (choices, multi-select, free text,
+  skip).
+- **Fill credential requests** — the agent requests API keys or files; you
+  review the request and enter the values; they are written server-side into
+  env/file destinations and never stored in the app.
+- **Slash commands** — `/new`, `/stop`, `/retry`, `/title`, `/branch`, `/delete`,
+  `/help`, plus server skills (expanded through the plugin).
 
-### 2. Expose it securely
+## Server requirements
 
-Keep the server protected with authentication and connect through a secure HTTPS tunnel, VPN, or reverse proxy.
+1. A Hermes Agent server with the dashboard enabled and `dashboard.basic_auth`
+   configured (username/password).
+2. The `hermes-ios` plugin installed and enabled (see MyHermit's
+   `plugin/install.sh` / `plugin/SETUP.md`), which also requires
+   `API_SERVER_ENABLED` + `API_SERVER_KEY` in `~/.hermes/.env`.
+3. The `hermes-cred-requests` plugin for the Credentials tab.
 
-For example:
-
-```bash
-cloudflared tunnel --url localhost:4096
-```
-
-Tailscale, Cloudflare Tunnel, and other secure networking options work well.
-
-### 3. Connect from OpenCode Mobile
-
-Enter the protected server URL in the app, authenticate, choose your workspace, and continue your sessions.
-
-For the complete setup flow, see the [Getting Started guide](https://getopencode.app/docs/getting-started/).
-
-### 4. Connect an AI provider
-
-Open **Settings → AI & providers → Add provider**, choose your provider,
-select **API key** if multiple login methods are offered, paste the key, and
-save. For OpenCode Go, choose **OpenCode Go** and paste the key from your
-OpenCode console. You can then enable its models and select one in Chat.
-Tap an already configured provider to reopen login or replace its key.
-
-Provider keys are saved on the connected OpenCode server. On OpenCode 2,
-the server's integration catalog determines which providers support API-key
-or OAuth login; environment-only providers must be configured on the server.
-
-## Install
-
-### Android
-
-Recommended:
-
-[**Download from Google Play →**](https://play.google.com/store/apps/details?id=app.getopencode)
-
-Or install the latest APK directly:
-
-[**Download latest APK →**](https://github.com/alvarolorentedev/opencode-mobile/releases/latest/download/opencode-mobile.apk)
-
-### iOS
-
-OpenCode Mobile is currently available through TestFlight:
-
-[**Join the iOS beta →**](https://testflight.apple.com/join/ddcE5Wzz)
-
-For installation details and requirements, visit:
-
-[**getopencode.app/download →**](https://getopencode.app/download/)
-
-## Privacy and control
-
-OpenCode Mobile is designed around self-hosted OpenCode environments.
-
-- Your source code remains on your OpenCode host.
-- The app connects to infrastructure you control.
-- Server credentials are stored using secure device storage where appropriate.
-- You choose how your OpenCode instance is exposed.
-- No hosted OpenCode server is required.
-
-For remote access, prefer authenticated HTTPS, a VPN, or a secure tunnel rather than exposing an unauthenticated OpenCode port directly to the internet.
-
-## Community-built
-
-OpenCode Mobile is not an official OpenCode product. It is not built by the
-OpenCode team, is not endorsed by them, and is not affiliated with them in any
-way.
-
-It is an independent open-source project built for people who already use OpenCode and want to keep their agent workflows reachable when they step away from their desk.
-
-OpenCode and its trademarks belong to their respective owners.
+The app checks all of this after sign-in and reports exactly what is missing.
 
 ## Development
 
-OpenCode Mobile is built with:
+```bash
+npm install
+npm run typecheck
+npm run lint
+npx vitest run                         # unit + protocol + integration suites
+npm run test:fake-server:self          # OpenCode fake self-test (upstream)
+npm run test:e2e:web                   # Playwright e2e (upstream flows)
+```
 
-- React Native
-- Expo
-- TypeScript
-- Expo Router
-- `@opencode/client` for native OpenCode 2; `@opencode-ai/sdk` isolated to OpenCode 1 compatibility
+The Hermes protocol layer lives in `lib/hermes/`; its contract is pinned by
+`tests/vitest/hermes-protocol.test.ts` and end-to-end by
+`tests/vitest/hermes-integration.test.ts` against `tests/fake-hermes/server.mjs`
+(a controllable fake Hermes dashboard + plugins).
 
-For local development, architecture, testing, and release instructions:
+Architecture and the adaptation state are documented in
+[docs/hermes.md](docs/hermes.md) and [AGENTS.md](AGENTS.md).
 
-[**Read the development guide →**](docs/development.md)
+## License
 
-## Contributing
-
-Contributions are welcome.
-
-You can help by:
-
-- opening bug reports
-- proposing features
-- improving documentation
-- testing Android and iOS builds
-- submitting pull requests
-- helping reproduce compatibility issues with new OpenCode releases
-
-Browse the [issue tracker](https://github.com/alvarolorentedev/opencode-mobile/issues) or open a PR.
-
-## ⭐ Star History
-
-<a href="https://www.star-history.com/?repos=alvarolorentedev%2Fopencode-mobile&type=timeline&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=alvarolorentedev/opencode-mobile&type=timeline&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=alvarolorentedev/opencode-mobile&type=timeline&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=alvarolorentedev/opencode-mobile&type=timeline&legend=top-left" />
- </picture>
-</a>
-
-## ❤️ Support Us
-
-OpenCode Mobile is free and open source.
-
-If the project is useful to you, you can help support continued development, testing, releases, and infrastructure through:
-
-- GitHub Sponsors
-- Ko-fi
-- PayPal
-- Bitcoin
-- Ethereum
-
-[**Support Us →**](https://getopencode.app/support/)
-
-<a href="https://github.com/alvarolorentedev/opencode-mobile/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=alvarolorentedev/opencode-mobile" />
-</a>
-
-Made with [contrib.rocks](https://contrib.rocks).
-
----
-
-<p align="center">
-  <strong>Take your next OpenCode session with you.</strong>
-</p>
-
-<p align="center">
-  <a href="https://getopencode.app/">getopencode.app</a>
-</p>
+Apache License 2.0 — inherited from the upstream
+[opencode-mobile](https://github.com/alvarolorentedev/opencode-mobile) fork.

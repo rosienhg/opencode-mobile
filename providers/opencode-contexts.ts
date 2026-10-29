@@ -5,6 +5,7 @@ import type {
   CapabilitiesContextValue,
   ChatContextValue,
   ConnectionContextValue,
+  CredentialsContextValue,
   ConversationContextValue,
   CurrentSessionContextValue,
   DiagnosticsContextValue,
@@ -34,6 +35,7 @@ export const CurrentSessionContext = createContext<CurrentSessionContextValue | 
 export const SessionLibraryContext = createContext<SessionLibraryContextValue | null>(null);
 export const ChatContext = createContext<ChatContextValue | null>(null);
 export const ApprovalsContext = createContext<ApprovalsContextValue | null>(null);
+export const CredentialsContext = createContext<CredentialsContextValue | null>(null);
 export const ConversationContext = createContext<ConversationContextValue | null>(null);
 export const TerminalContext = createContext<TerminalContextValue | null>(null);
 export const McpContext = createContext<McpContextValue | null>(null);
@@ -59,6 +61,7 @@ export const useCurrentSession = () => useDomainValue(CurrentSessionContext, 'us
 export const useSessionLibrary = () => useDomainValue(SessionLibraryContext, 'useSessionLibrary');
 export const useChat = () => useDomainValue(ChatContext, 'useChat');
 export const useApprovals = () => useDomainValue(ApprovalsContext, 'useApprovals');
+export const useCredentials = () => useDomainValue(CredentialsContext, 'useCredentials');
 export const useConversation = () => useDomainValue(ConversationContext, 'useConversation');
 export const useTerminal = () => useDomainValue(TerminalContext, 'useTerminal');
 export const useMcp = () => useDomainValue(McpContext, 'useMcp');

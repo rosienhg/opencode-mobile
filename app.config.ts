@@ -30,11 +30,10 @@ const e2eServerUrl = env('EXPO_PUBLIC_E2E_SERVER_URL');
 // paid-team builds must leave it unset so push notifications keep working.
 const disablePushEntitlement = env('EXPO_IOS_DISABLE_PUSH_ENTITLEMENT') === '1';
 // Apple bundle identifiers are unique across every developer account, not just
-// per team. The published "app.getopencode.mobile" (and its ".dev" variant)
-// are already registered to the paid team, so a free "Personal Team" account
-// can never register them. Override with a bundle id nobody else has claimed.
+// per team. The MyHermit bundle ids are distinct from the upstream OpenCode
+// Mobile app so both can coexist on a device during the transition.
 const iosBundleIdentifierOverride = env('EXPO_IOS_BUNDLE_ID');
-const defaultAndroidPackage = isFossVariant ? 'app.getopencode.fdroid' : 'app.getopencode';
+const defaultAndroidPackage = isFossVariant ? 'uk.co.nickhg.myhermit.foss' : 'uk.co.nickhg.myhermit';
 const releaseAndroidPackage = env('EXPO_ANDROID_PACKAGE') ?? defaultAndroidPackage;
 const developmentAndroidPackage = env('EXPO_ANDROID_PACKAGE_DEV') ?? `${releaseAndroidPackage}.dev`;
 const androidPackage = isDevelopmentVariant ? developmentAndroidPackage : releaseAndroidPackage;
@@ -79,18 +78,18 @@ const buildPropertiesPlugin: [string, {
 // the tuple shape so `plugins` stays assignable to ExpoConfig.
 type PluginList = NonNullable<ExpoConfig['plugins']>;
 const cameraPlugin: PluginList = [['expo-camera', {
-  cameraPermission: 'Allow $(PRODUCT_NAME) to scan an OpenCode pairing QR code.',
+  cameraPermission: 'Allow $(PRODUCT_NAME) to scan QR codes.',
   recordAudioAndroid: false,
 }]];
 const iapPlugin: PluginList = ['expo-iap'];
 
 const config: ExpoConfig = {
-  name: isDevelopmentVariant ? 'OpenCode Mobile Dev' : 'OpenCode Mobile',
-  slug: 'opencode-mobile',
+  name: isDevelopmentVariant ? 'MyHermit Dev' : 'MyHermit',
+  slug: 'myhermit',
   version: '1.0.103',
   orientation: 'default',
   icon: './assets/images/icon.png',
-  scheme: 'opencodemobile',
+  scheme: 'myhermit',
   userInterfaceStyle: 'automatic',
   android: {
     package: androidPackage,
@@ -107,11 +106,11 @@ const config: ExpoConfig = {
     favicon: './assets/images/favicon.png',
   },
   ios: {
-    bundleIdentifier: iosBundleIdentifierOverride ?? (isDevelopmentVariant ? 'app.getopencode.mobile.dev' : 'app.getopencode.mobile'),
+    bundleIdentifier: iosBundleIdentifierOverride ?? (isDevelopmentVariant ? 'uk.co.nickhg.myhermit.dev' : 'uk.co.nickhg.myhermit'),
     buildNumber: '103',
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
-      NSPhotoLibraryUsageDescription: 'Allow OpenCode Mobile to access photos you choose to attach to chat messages.',
+      NSPhotoLibraryUsageDescription: 'Allow MyHermit to access photos you choose to attach to chat messages.',
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoads: true,
       },
@@ -199,7 +198,7 @@ const config: ExpoConfig = {
       {
         widgets: [
           {
-            name: 'SessionWidget',
+            name: 'ChatWidget',
             label: 'OpenCode latest replies',
             description: 'Latest assistant replies across recent chats.',
             minWidth: '180dp',
@@ -209,13 +208,13 @@ const config: ExpoConfig = {
             resizeMode: 'horizontal|vertical',
           },
           {
-            name: 'AttentionWidget', label: 'OpenCode awaiting actions',
+            name: 'AttentionWidget', label: 'MyHermit awaiting actions',
             description: 'Pending permissions and questions across projects.',
             minWidth: '180dp', minHeight: '140dp', targetCellWidth: 4, targetCellHeight: 3,
             resizeMode: 'horizontal|vertical',
           },
           {
-            name: 'PlanWidget', label: 'OpenCode plan progress',
+            name: 'PlanWidget', label: 'MyHermit plan progress',
             description: 'Todo steps and progress in the current chat.',
             minWidth: '180dp', minHeight: '140dp', targetCellWidth: 4, targetCellHeight: 3,
             resizeMode: 'horizontal|vertical',

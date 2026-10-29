@@ -15,6 +15,6 @@ export default function OnboardingConnectScreen() {
   return <OnboardingStep step="connect" title={t('settings:connection.addConnection')} testID="onboarding-connect" backDisabled={busy} footer={
     <Button disabled={busy} testID="onboarding-connect-skip" onPress={navigation.next}>{t('onboarding:connect.skip')}</Button>
   }>
-    <ConnectionSetupForm onBusyChange={setBusy} onConnected={() => router.push('/onboarding/ai')} />
+    <ConnectionSetupForm onBusyChange={setBusy} onConnected={() => router.push('/onboarding/general')} />
   </OnboardingStep>;
 }

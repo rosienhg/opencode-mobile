@@ -12,6 +12,7 @@ import { getActiveSessions } from '@/providers/active-sessions';
 import { useTranscriptState } from '@/providers/use-transcript-state';
 import { useTranscriptReadErrors } from '@/providers/use-transcript-read-errors';
 import { useHermesRuns } from '@/providers/use-hermes-runs';
+import { useHermesCredentials } from '@/providers/use-hermes-credentials';
 import { useHermesPrompts } from '@/providers/use-hermes-prompts';
 import { useWorkspaceRuntimeState } from '@/providers/use-workspace-runtime-state';
 import { useOpencodeProviderEffects } from '@/providers/use-opencode-provider-effects';
@@ -22,12 +23,23 @@ import { useConnectionActions } from '@/providers/use-connection-actions';
 import { useConnectionRetry } from '@/providers/use-connection-retry';
 import { useOpencodeProviderValues } from '@/providers/opencode-provider-values';
 import { useOpencodeProviderReset } from '@/providers/use-opencode-provider-reset';
-import { useCoalescedRefresh } from '@/providers/use-coalesced-refresh';
 
 import type { WorkspaceCatalog, WorkspaceRuntimeInput } from '@/providers/workspace-types';
 
 const EMPTY_CATALOG: WorkspaceCatalog = { sessions: [], statuses: {}, refresh: async () => undefined, removeSession: () => {} };
 const NOOP_REFRESH = async () => undefined;
+
+// Client-side built-ins, matching MyHermit's slash commands. Anything else
+// starting with "/" is a skill and expands through the plugin.
+const HERMES_BUILT_IN_COMMANDS = [
+  { name: 'new', description: 'Start a new chat' },
+  { name: 'stop', description: 'Stop the running turn' },
+  { name: 'retry', description: 'Resend your last message' },
+  { name: 'title', description: 'Rename this chat: /title <name>' },
+  { name: 'branch', description: 'Branch this chat (fork)' },
+  { name: 'delete', description: 'Delete this chat' },
+  { name: 'help', description: 'Show the commands you can type' },
+];
 
 // Hermes connections have no OpenCode-only surfaces. The contexts stay part of
 // the app's contract (components reference them), so the composition supplies
@@ -123,8 +135,6 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
 
   const refreshProjectCatalogRef = useRef<(silent?: boolean) => Promise<void>>(async () => undefined);
   const refreshChatCapabilitiesRef = useRef<() => Promise<void>>(async () => undefined);
-  const refreshProjectCatalogLatest = useCallback((silent?: boolean) => refreshProjectCatalogRef.current(silent), []);
-  const refreshChatCapabilitiesLatest = useCallback(() => refreshChatCapabilitiesRef.current(), []);
 
   const onboardingCompleted = isOnboardingComplete(state.onboardingVersion);
 
@@ -237,12 +247,6 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
   const project = useProjectActions({ ...state, client, catalogClient, isCurrentClient, isCurrentCatalogClient, clearProjectState, isHydrated, refreshMessages: transcriptRead.readMessages });
 
   const capabilities = useCapabilitiesActions({ ...state, client, isCurrentClient });
-  // Event bursts (rename + update) share one refresh instead of starting
-  // overlapping reads.
-  const scheduleSessionsRefresh = useCoalescedRefresh(() => project.refreshSessions(), 150);
-  const scheduleChatCapabilitiesRefresh = useCoalescedRefresh(capabilities.refreshChatCapabilities, 250);
-  const scheduleServerFeaturesRefresh = useCoalescedRefresh(project.refreshServerFeatures, 250);
-  const scheduleProjectCatalogRefresh = useCoalescedRefresh(() => project.refreshProjectCatalog(true), 250);
 
   const sessionActions = useSessionActions({
     ...state,
@@ -275,6 +279,8 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     onAuthFailure: () => connectionActionsRef.current?.handleStreamAuthFailure('auth'),
     onRunEnded: (sessionId) => { void sendNextQueuedRef.current(sessionId); },
   });
+
+  const credentials = useHermesCredentials(client, state.connection.status === 'connected');
 
   const prompts = useHermesPrompts({
     client,
@@ -355,6 +361,49 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     pruneTranscript: transcript.prune,
   });
 
+  // Hermes built-ins run client-side; skill commands expand and send.
+  const hermesCommandActions = useMemo(() => ({
+    executeCommand: async (sessionId: string, command: string, args: string) => {
+      switch (command.toLowerCase().replace(/_/g, '-')) {
+        case 'stop':
+          await runs.stopRun(sessionId);
+          return;
+        case 'new': {
+          const session = await sessionActions.createSession();
+          await sessionActions.openSession(session.id);
+          return;
+        }
+        case 'title': {
+          const title = args.trim();
+          if (title) await sessionActions.renameSession(sessionId, title);
+          return;
+        }
+        case 'branch': {
+          const forked = await sessionActions.forkSession(sessionId);
+          await sessionActions.openSession(forked.id);
+          return;
+        }
+        case 'delete':
+          await sessionActions.deleteSession(sessionId);
+          return;
+        case 'retry': {
+          const records = state.messagesBySession[sessionId] ?? [];
+          const lastUser = [...records].reverse().find((record) => record.info.role === 'user');
+          const text = lastUser?.parts.find((part) => part.type === 'text')?.text ?? '';
+          if (text) await prompts.sendPrompt(sessionId, text);
+          return;
+        }
+        case 'help':
+          return;
+        default:
+          await prompts.sendPrompt(sessionId, `/${command}${args ? ` ${args}` : ''}`);
+      }
+    },
+    executeShell: async () => {
+      throw new Error('Hermes has no shell surface.');
+    },
+  }), [prompts, runs, sessionActions, state.messagesBySession]);
+
   // Hermes answer paths override the OpenCode interaction actions: approvals
   // ride the run stream, clarify answers go to the plugin.
   const hermesInteractions = useMemo(() => ({
@@ -386,10 +435,12 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     ...extensionsStub,
     ...project,
     ...sessionActions,
+    ...hermesCommandActions,
     ...hermesInteractions,
     ...capabilities,
     ...prompts,
     ...connectionActions,
+    commands: [...state.commands, ...HERMES_BUILT_IN_COMMANDS],
     activeSessions,
     refreshActiveSessions: catalog.refresh,
     conversation,
@@ -408,6 +459,8 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     reconnect,
     sharedInput: emptySharedInput,
     servicesValue: servicesStub,
+    hermesLiveRecords: runs.liveRecordsBySession,
+    credentialsState: credentials,
   });
 
   const suspend = useCallback(() => {
@@ -431,7 +484,7 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
       todosBySession: state.todosBySession, streamConnectedRef },
   }), [input.connection.enabled, values, busy, suspend, catalogClient, catalog.sessions, catalog.statuses, state.pendingPermissionsBySession,
     state.pendingQuestionsBySession, state.settings, isCurrentCatalogClient, state.connectionScope,
-    state.currentSessionId, state.sessions, activeSessions, transcript.todoRecordsBySession, state.todosBySession, runs]);
+    state.currentSessionId, state.sessions, activeSessions, transcript.todoRecordsBySession, state.todosBySession, runs.liveRecordsBySession]);
 }
 
 // The transcript retry bridge is defined after the hooks it forwards to.

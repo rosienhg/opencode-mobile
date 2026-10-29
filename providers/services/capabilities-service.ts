@@ -86,10 +86,7 @@ export async function discoverChatCapabilities(client: ScopedOpencodeClient, act
     // Hermes discovery: models come from the gateway's model options and the
     // composer's slash commands from the plugin's skill list. Provider
     // credential management is a server-side concern on Hermes.
-    const [modelOptions, skillCommands] = await Promise.all([
-      client.hermes.api.getModelOptions().catch(() => ({ providers: [] })),
-      client.hermes.api.listSkillCommands().catch(() => []),
-    ]);
+    const modelOptions = await client.hermes.api.getModelOptions().catch(() => ({ providers: [] }));
     const models = toModelOptions(modelOptions);
     return {
       config: undefined,

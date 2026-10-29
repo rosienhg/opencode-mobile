@@ -3,7 +3,8 @@
     "chat": "चैट",
     "terminal": "टर्मिनल",
     "projects": "प्रोजेक्ट",
-    "settings": "सेटिंग्स"
+    "settings": "सेटिंग्स",
+    "credentials": "Credentials"
   },
   "actions": {
     "cancel": "रद्द करें",

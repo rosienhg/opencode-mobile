@@ -135,6 +135,10 @@ export type ProviderValuesInput = ActionInputs & {
   disconnectMcpServer: (name: string) => Promise<void>;
   mcpOAuth: import('./opencode-provider-types').McpContextValue['mcpOAuth'];
   extensions: ExtensionsContextValue['extensions'];
+  credentialsState: import('@/providers/use-hermes-credentials').HermesCredentialsState;
   sharedInput: SharedInput;
   servicesValue: import('./opencode-provider-types').ServiceManagementApi;
+  // Hermes live-run projection: synthetic transcript records for the run in
+  // flight (the gateway only persists messages around the terminal event).
+  hermesLiveRecords?: Record<string, SessionMessageRecord[]>;
 };
