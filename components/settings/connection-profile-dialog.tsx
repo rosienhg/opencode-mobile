@@ -72,6 +72,8 @@ export function ConnectionProfileDialog({ title, submitLabel, showName = true, i
   const locked = busy === 'save';
   const v1 = probe?.status === 'detected' && probe.contract === 'v1';
   const v2 = probe?.status === 'detected' && probe.contract === 'v2';
+  // Hermes dashboards always sign in with a username and password.
+  const hermes = probe?.status === 'detected' && probe.contract === 'hermes';
 
   function back() {
     request.current += 1;
@@ -160,12 +162,12 @@ export function ConnectionProfileDialog({ title, submitLabel, showName = true, i
               <Text style={styles.address} numberOfLines={2}>{serverUrl}</Text>
               <Button testID="connection-profile-change" disabled={Boolean(busy)} onPress={back}>{t('settings:connection.setup.change')}</Button>
             </View>
-            <Text testID="connection-profile-detection" accessibilityLiveRegion="polite" style={{ color: v1 || v2 ? palette.tint : palette.muted }}>
-              {v1 || v2 ? t('settings:connection.setup.detected', { version: v2 ? '2' : '1' }) : t('settings:connection.setup.identify')}
+            <Text testID="connection-profile-detection" accessibilityLiveRegion="polite" style={{ color: v1 || v2 || hermes ? palette.tint : palette.muted }}>
+              {hermes ? t('settings:connection.setup.detectedHermes') : v1 || v2 ? t('settings:connection.setup.detected', { version: v2 ? '2' : '1' }) : t('settings:connection.setup.identify')}
             </Text>
-            {!v2 && !v1 ? <Button testID="connection-profile-custom-username" style={styles.left} disabled={Boolean(busy)} onPress={() => setCustomUsername((value) => !value)}>{t('settings:connection.setup.customUsername')}</Button> : null}
-            {!v2 && (v1 || customUsername) ? <TextInput mode="outlined" label={t('settings:connection.fields.username')} testID="connection-profile-username-input"
-              value={username} onChangeText={setUsername} disabled={Boolean(busy)} autoCapitalize="none" autoCorrect={false} placeholder="opencode" /> : null}
+            {!v2 && !v1 && !hermes ? <Button testID="connection-profile-custom-username" style={styles.left} disabled={Boolean(busy)} onPress={() => setCustomUsername((value) => !value)}>{t('settings:connection.setup.customUsername')}</Button> : null}
+            {!v2 && (v1 || customUsername || hermes) ? <TextInput mode="outlined" label={t('settings:connection.fields.username')} testID="connection-profile-username-input"
+              value={username} onChangeText={setUsername} disabled={Boolean(busy)} autoCapitalize="none" autoCorrect={false} placeholder={hermes ? 'hermes' : 'opencode'} /> : null}
             <TextInput mode="outlined" label={t('settings:connection.fields.password')} testID="connection-profile-password-input" value={password}
               onChangeText={setPassword} secureTextEntry={!showPassword} disabled={Boolean(busy)} autoCapitalize="none" autoCorrect={false}
               right={<PaperInput.Icon icon={showPassword ? 'eye-off' : 'eye'} onPress={() => setShowPassword((value) => !value)} accessibilityLabel={t(showPassword ? 'settings:connection.setup.hidePassword' : 'settings:connection.setup.showPassword')} />} />

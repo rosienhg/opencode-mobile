@@ -70,7 +70,7 @@ export function useHermesCredentials(client: ScopedOpencodeClient, connected: bo
 
   const split = useMemo(() => splitCredentialRequests(requests), [requests]);
 
-  return {
+  return useMemo(() => ({
     requests,
     pending: split.pending,
     history: split.history,
@@ -80,5 +80,5 @@ export function useHermesCredentials(client: ScopedOpencodeClient, connected: bo
     load,
     fulfill,
     cancel,
-  };
+  }), [requests, split.pending, split.history, pluginMissing, loading, error, load, fulfill, cancel]);
 }

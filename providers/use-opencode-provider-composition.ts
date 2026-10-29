@@ -2,6 +2,7 @@ import { emptySharedInput } from '@/providers/use-share-state';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 
 import { buildClient } from '@/lib/opencode/client';
+import { buildOpencodeProjects, resolveActiveProject } from '@/providers/opencode-provider-utils';
 import {
   CURRENT_ONBOARDING_VERSION,
   isOnboardingComplete,
@@ -24,91 +25,20 @@ import { useConnectionRetry } from '@/providers/use-connection-retry';
 import { useOpencodeProviderValues } from '@/providers/opencode-provider-values';
 import { useOpencodeProviderReset } from '@/providers/use-opencode-provider-reset';
 
+import {
+  HERMES_BUILT_IN_COMMANDS,
+  extensionsStub,
+  mcpStub,
+  permissionRulesStub,
+  servicesStub,
+  terminalStub,
+  worktreeStub,
+} from '@/providers/hermes-composition-stubs';
 import type { WorkspaceCatalog, WorkspaceRuntimeInput } from '@/providers/workspace-types';
 
 const EMPTY_CATALOG: WorkspaceCatalog = { sessions: [], statuses: {}, refresh: async () => undefined, removeSession: () => {} };
 const NOOP_REFRESH = async () => undefined;
-
-// Client-side built-ins, matching MyHermit's slash commands. Anything else
-// starting with "/" is a skill and expands through the plugin.
-const HERMES_BUILT_IN_COMMANDS = [
-  { name: 'new', description: 'Start a new chat' },
-  { name: 'stop', description: 'Stop the running turn' },
-  { name: 'retry', description: 'Resend your last message' },
-  { name: 'title', description: 'Rename this chat: /title <name>' },
-  { name: 'branch', description: 'Branch this chat (fork)' },
-  { name: 'delete', description: 'Delete this chat' },
-  { name: 'help', description: 'Show the commands you can type' },
-];
-
-// Hermes connections have no OpenCode-only surfaces. The contexts stay part of
-// the app's contract (components reference them), so the composition supplies
-// inert values; the settings registry and tab layout hide their screens.
 const noop = () => undefined;
-const asyncNoop = async () => undefined;
-const terminalStub = {
-  terminals: [],
-  activeTerminalId: undefined,
-  terminalRuntime: { scope: 0, instances: [], registerRenderer: () => noop, resize: noop },
-  terminalConnection: 'idle' as const,
-  refreshTerminals: asyncNoop,
-  createTerminal: async () => { throw new Error('Hermes has no terminal surface.'); },
-  openTerminal: asyncNoop,
-  sendTerminalInput: noop,
-  closeTerminal: asyncNoop,
-};
-const worktreeStub = {
-  worktrees: { entries: [], loading: false },
-  refreshWorktrees: asyncNoop,
-  createWorktree: asyncNoop,
-  removeWorktree: asyncNoop,
-  resetWorktrees: noop,
-};
-const mcpStub = {
-  mcpStatuses: {},
-  refreshMcpServers: asyncNoop,
-  addMcpServer: asyncNoop,
-  connectMcpServer: asyncNoop,
-  disconnectMcpServer: asyncNoop,
-  mcpOAuth: { methods: async () => [], start: async () => { throw new Error('Hermes has no MCP surface.'); }, complete: asyncNoop, wait: asyncNoop, cancel: asyncNoop },
-  resetMcpState: noop,
-};
-const extensionsStub = {
-  extensions: {
-    snapshot: undefined,
-    isRefreshing: false,
-    refresh: asyncNoop,
-    addMcp: asyncNoop,
-    updateMcp: asyncNoop,
-    removeMcp: asyncNoop,
-    addPlugin: asyncNoop,
-    removePlugin: asyncNoop,
-    saveCommand: asyncNoop,
-    removeCommand: asyncNoop,
-    createSkill: asyncNoop,
-    updateSkill: asyncNoop,
-    removeSkill: asyncNoop,
-    restoreBackup: asyncNoop,
-  },
-};
-const permissionRulesStub = {
-  savedPermissions: [],
-  refreshSavedPermissions: asyncNoop,
-  removeSavedPermission: asyncNoop,
-  resetPermissionRules: noop,
-};
-const servicesStub = {
-  services: [] as never[],
-  available: false as const,
-  machines: [] as never[],
-  isRefreshing: false,
-  isSaving: false,
-  refresh: asyncNoop,
-  save: async () => { throw new Error('Hermes has no service management surface.'); },
-  remove: asyncNoop,
-  selectMachine: noop,
-  activateTarget: async () => false,
-};
 
 export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
   const state = useWorkspaceRuntimeState(input);
@@ -151,8 +81,11 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     setOnboardingActive(false);
   }, [setOnboardingActive]);
 
-  // Hermes has no projects: the catalog is one synthetic workspace.
-  const projects = useMemo(() => [], []);
+  // Hermes has no projects: the catalog resolves to one synthetic workspace.
+  const projects = useMemo(
+    () => buildOpencodeProjects(state.projectPathsByConnection[state.connectionScope] ?? [], state.serverProjects),
+    [state.connectionScope, state.projectPathsByConnection, state.serverProjects],
+  );
 
   const client = useMemo(
     () => buildClient({ ...state.settings, directory: '' }, 'hermes'),
@@ -164,14 +97,12 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     [state.settings, input.connection.enabled]);
   // Tag each client instance with the generation current when it is first seen.
   // A layout effect keeps this off the render path while still running before
-  // any callback that could consume `isCurrentClient`.
+  // any callback that could consume `isCurrentClient`. Generation bumps that
+  // reuse the client object (catalog-driven project switches) must re-tag the
+  // current instances, or every later isCurrentClient check fails.
   useLayoutEffect(() => {
-    if (!clientGenerationRef.current.has(client)) {
-      clientGenerationRef.current.set(client, scopeGenerationRef.current);
-    }
-    if (!catalogGenerationRef.current.has(catalogClient)) {
-      catalogGenerationRef.current.set(catalogClient, serverGenerationRef.current);
-    }
+    clientGenerationRef.current.set(client, scopeGenerationRef.current);
+    catalogGenerationRef.current.set(catalogClient, serverGenerationRef.current);
   });
   const isCurrentClient = useCallback(
     (candidate: object) => input.connection.enabled && clientGenerationRef.current.get(candidate) === scopeGenerationRef.current,
@@ -280,6 +211,10 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     onRunEnded: (sessionId) => { void sendNextQueuedRef.current(sessionId); },
   });
 
+  const skillCommandNames = useMemo(
+    () => state.commands.map((command) => command.name.toLowerCase()),
+    [state.commands],
+  );
   const credentials = useHermesCredentials(client, state.connection.status === 'connected');
 
   const prompts = useHermesPrompts({
@@ -290,7 +225,7 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     connectionScope: state.connectionScope,
     chatPreferences: state.chatPreferences,
     availableModels: state.availableModels,
-    skillCommandNames: state.commands.map((command) => command.name.toLowerCase()),
+    skillCommandNames: skillCommandNames,
     runs,
     busyNotificationsRef: state.busyNotificationsRef,
     promptSubmissionRef: state.promptSubmissionRef,
@@ -404,6 +339,12 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     },
   }), [prompts, runs, sessionActions, state.messagesBySession]);
 
+  const activeProject = useMemo(
+    () => resolveActiveProject(projects, state.activeProjectPath, worktreeStub.worktrees) ?? (state.activeProjectPath
+      ? { path: state.activeProjectPath, label: state.activeProjectPath.split('/').filter(Boolean).pop() || state.activeProjectPath } : undefined),
+    [projects, state.activeProjectPath],
+  );
+
   // Hermes answer paths override the OpenCode interaction actions: approvals
   // ride the run stream, clarify answers go to the plugin.
   const hermesInteractions = useMemo(() => ({
@@ -453,7 +394,7 @@ export function useOpencodeProviderComposition(input: WorkspaceRuntimeInput) {
     startOnboardingReview,
     stopOnboardingReview,
     projects,
-    activeProject: undefined,
+    activeProject: activeProject,
     eventStreamStatus: runs.eventStreamStatus,
     network,
     reconnect,

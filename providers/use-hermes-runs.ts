@@ -85,6 +85,7 @@ export function useHermesRuns(input: HermesRunsInput) {
 
   const [runs, setRuns] = useState<Record<string, HermesRunView>>({});
   const [runsRevision, setRunsRevision] = useState(0);
+  const [liveRunCount, setLiveRunCount] = useState(0);
   const [promptQueueBySession, setPromptQueueBySession] = useState<Record<string, HermesPromptQueueEntry[]>>({});
   const [attachedStreams, setAttachedStreams] = useState(0);
   const clarifyEntriesRef = useRef(new Map<string, ClarifyEntry>());
@@ -349,6 +350,7 @@ export function useHermesRuns(input: HermesRunsInput) {
         const next = { ...current };
         for (const sid of Object.keys(bySession)) next[sid] = bySession[sid];
         if (sessionId && !bySession[sessionId]) delete next[sessionId];
+        if (JSON.stringify(next) === JSON.stringify(current)) return current;
         return next;
       });
     } catch {
@@ -388,14 +390,13 @@ export function useHermesRuns(input: HermesRunsInput) {
   // app sits on another chat).
   useEffect(() => {
     if (!connected || !online) return;
-    const hasRuns = Object.keys(runs).length > 0;
-    const pollTarget = hasRuns ? undefined : currentSessionId;
-    if (!hasRuns && !currentSessionId) return;
+    const pollTarget = liveRunCount > 0 ? undefined : currentSessionId;
+    if (liveRunCount === 0 && !currentSessionId) return;
     const tick = () => { void syncClarifications(pollTarget); };
     tick();
     const timer = setInterval(tick, pollTarget ? ACTIVE_RUN_POLL_MS : CLARIFY_POLL_MS);
     return () => clearInterval(timer);
-  }, [connected, currentSessionId, online, runsRevision, runs, syncClarifications]);
+  }, [connected, currentSessionId, liveRunCount, online, runsRevision, syncClarifications]);
 
   // Active-run discovery for the current session: catches runs started
   // elsewhere (dashboard, CLI, messaging) and busy-elsewhere turns.
@@ -459,9 +460,10 @@ export function useHermesRuns(input: HermesRunsInput) {
     setPromptQueueBySession({});
     setRuns({});
     setRunsRevision((current) => current + 1);
+    setLiveRunCount(0);
   }, []);
 
-  return {
+  return useMemo(() => ({
     registerRun,
     stopRun,
     answerApproval,
@@ -478,7 +480,7 @@ export function useHermesRuns(input: HermesRunsInput) {
     syncClarifications,
     reset,
     eventStreamStatus,
-  };
+  }), [registerRun, stopRun, answerApproval, runsRef_get, getQueue, liveRecordsBySession, pendingUserTexts, promptQueueBySession, enqueuePrompt, removeQueued, answerClarify, skipClarify, syncClarifications, reset, eventStreamStatus]);
 }
 
 function decodeSafely(data: string): RunEvent | undefined {

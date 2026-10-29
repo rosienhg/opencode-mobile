@@ -188,8 +188,11 @@ export function createFakeHermes(options = {}) {
     response.end(JSON.stringify(body));
   }
 
+  const requestLog = [];
+
   async function handler(request, response, url) {
     cors(request, response);
+    requestLog.push(`${request.method} ${url.pathname}`);
     if (request.method === 'OPTIONS') {
       response.statusCode = 204;
       response.end();
@@ -553,6 +556,7 @@ export function createFakeHermes(options = {}) {
     }
     if (path === '/__control/state' && method === 'GET') {
       json(response, {
+        requestLog: requestLog.slice(-200),
         sessions: state.sessions,
         messages: Object.fromEntries(state.messages),
         runs: Object.fromEntries([...state.runs.entries()].map(([id, run]) => [id, { sessionId: run.sessionId, output: run.output, cursor: run.cursor, stopped: run.stopped, approvalAnswer: run.approvalAnswer }])),
@@ -626,7 +630,7 @@ export function createFakeHermes(options = {}) {
   }
 
   const listen = new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => {
+    server.listen(options.port ?? 0, '127.0.0.1', () => {
       const { port } = server.address();
       resolve(port);
     });
@@ -645,4 +649,12 @@ export function createFakeHermes(options = {}) {
     },
     state,
   };
+}
+
+// Standalone entry point for Playwright: FAKE_HERMES_PORT=12345 node tests/fake-hermes/server.mjs
+import { pathToFileURL } from 'node:url';
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const fake = createFakeHermes({ port: process.env.FAKE_HERMES_PORT ? Number(process.env.FAKE_HERMES_PORT) : undefined });
+  await fake.start();
+  console.log(`fake-hermes listening on ${fake.url}`);
 }

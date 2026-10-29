@@ -160,7 +160,7 @@ export function useHermesPrompts(input: HermesPromptsInput) {
 
   const clearPromptError = useCallback(() => setPromptError(undefined), []);
 
-  return {
+  return useMemo(() => ({
     sendPrompt,
     abortSession,
     sendNextQueued,
@@ -171,5 +171,5 @@ export function useHermesPrompts(input: HermesPromptsInput) {
     promptError,
     setPromptError,
     clearPromptError,
-  };
+  }), [sendPrompt, abortSession, sendNextQueued, cancelPrompt, pendingPromptsBySession, sendingState, promptError]);
 }

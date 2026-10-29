@@ -98,7 +98,8 @@
         "expired": "Este código expirou ou já foi usado. Execute opencode pair novamente.",
         "unreachable": "Servidor inacessível. Confira se os dispositivos estão na mesma rede ou insira o endereço manualmente.",
         "loopback": "Este código contém apenas um endereço localhost. Execute opencode service set hostname 0.0.0.0, depois opencode service start e opencode pair no computador."
-      }
+      },
+      "detectedHermes": "Hermes dashboard detected. Sign in with your dashboard username and password."
     },
     "headers": {
       "title": "Cabeçalhos personalizados",

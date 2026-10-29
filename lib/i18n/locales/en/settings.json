@@ -98,7 +98,8 @@
         "expired": "This pairing code expired or was already used. Run opencode pair again.",
         "unreachable": "Could not reach the server. Check that both devices are on the same network, or enter the address manually.",
         "loopback": "This code only contains a localhost address. Run opencode service set hostname 0.0.0.0, then opencode service start and opencode pair on your computer."
-      }
+      },
+      "detectedHermes": "Hermes dashboard detected. Sign in with your dashboard username and password."
     },
     "headers": {
       "title": "Custom headers",

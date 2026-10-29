@@ -98,7 +98,8 @@
         "expired": "यह कोड समाप्त हो गया है या पहले इस्तेमाल हो चुका है। opencode pair फिर चलाएँ।",
         "unreachable": "सर्वर तक नहीं पहुँच सके। दोनों डिवाइस एक ही नेटवर्क पर हैं यह जाँचें, या पता खुद दर्ज करें।",
         "loopback": "इस कोड में केवल localhost का पता है। कंप्यूटर पर opencode service set hostname 0.0.0.0 चलाएँ, फिर opencode service start और opencode pair चलाएँ।"
-      }
+      },
+      "detectedHermes": "Hermes dashboard detected. Sign in with your dashboard username and password."
     },
     "headers": {
       "title": "कस्टम हेडर",

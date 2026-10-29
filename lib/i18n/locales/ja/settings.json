@@ -98,7 +98,8 @@
         "expired": "このコードは期限切れか使用済みです。opencode pair を再実行してください。",
         "unreachable": "サーバーに接続できません。両方のデバイスが同じネットワークにあるか確認するか、アドレスを手動で入力してください。",
         "loopback": "このコードには localhost のアドレスしかありません。コンピューターで opencode service set hostname 0.0.0.0 を実行し、続けて opencode service start と opencode pair を実行してください。"
-      }
+      },
+      "detectedHermes": "Hermes dashboard detected. Sign in with your dashboard username and password."
     },
     "headers": {
       "title": "カスタムヘッダー",
