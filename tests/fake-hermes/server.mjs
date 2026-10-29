@@ -133,8 +133,15 @@ export function createFakeHermes(options = {}) {
       }
       run.cursor += 1;
       if (step.persist) {
-        addMessage(run.sessionId, { role: 'user', content: step.persist.user });
-        addMessage(run.sessionId, { role: 'assistant', content: step.persist.assistant });
+        // The user message was already persisted when the run started; the
+        // gateway writes the assistant turn (with its tool calls) just before
+        // the terminal event.
+        addMessage(run.sessionId, {
+          role: 'assistant',
+          content: step.persist.assistant,
+          reasoning: 'The fake thought about it.',
+          tool_calls: [{ id: 'call-1', function: { name: 'terminal', arguments: '{"command": "ls -la"}' } }],
+        });
       }
       run.emitted?.(step.event);
       if (step.event?.event === 'run.completed') run.output = step.event.output;
